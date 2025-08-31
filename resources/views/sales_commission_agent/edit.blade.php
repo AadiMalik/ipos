@@ -50,8 +50,20 @@
 
       <div class="col-md-6">
         <div class="form-group">
-          {!! Form::label('cmmsn_percent', __( 'lang_v1.cmmsn_percent' ) . ':') !!}
-            {!! Form::text('cmmsn_percent', @num_format($user->cmmsn_percent), ['class' => 'form-control input_number', 'placeholder' => __( 'lang_v1.cmmsn_percent' ), 'required' ]); !!}
+          {!! Form::label('cmmsn_percent','Individual Commission:') !!}
+            {!! Form::text('cmmsn_percent', @num_format($user->cmmsn_percent), ['class' => 'form-control input_number', 'placeholder' => 'Sale Individual Commission Percentage (%)', 'required' ]); !!}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="form-group">
+          {!! Form::label('fixed_commission', 'Fixed Commission:') !!}
+            {!! Form::text('fixed_commission', @num_format($user->fixed_commission), ['class' => 'form-control input_number', 'placeholder' => 'Sale Fixed Commission Percentage (%)', 'required' ]); !!}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="form-group">
+          {!! Form::label('global_commission', 'Global Commission:') !!}
+            {!! Form::text('global_commission', @num_format($user->global_commission), ['class' => 'form-control input_number', 'placeholder' => 'Sale Global Commission Percentage (%)', 'required' ]); !!}
         </div>
       </div>
       

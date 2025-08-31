@@ -37,7 +37,9 @@
                             <th>@lang( 'business.email' )</th>
                             <th>@lang( 'lang_v1.contact_no' )</th>
                             <th>@lang( 'business.address' )</th>
-                            <th>@lang( 'lang_v1.cmmsn_percent' )</th>
+                            <th>Individual Commission</th>
+                            <th>Fixed Commission</th>
+                            <th>Global Commission</th>
                             <th>@lang( 'messages.action' )</th>
                         </tr>
                     </thead>

@@ -1697,6 +1697,8 @@ $(document).ready(function() {
             { data: 'contact_no' },
             { data: 'address' },
             { data: 'cmmsn_percent' },
+            { data: 'fixed_commission' },
+            { data: 'global_commission' },
             { data: 'action' },
         ],
     });

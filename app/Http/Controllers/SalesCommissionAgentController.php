@@ -39,13 +39,13 @@ class SalesCommissionAgentController extends Controller
                         ->where('is_cmmsn_agnt', 1)
                         ->select(['id',
                             DB::raw("CONCAT(COALESCE(surname, ''), ' ', COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) as full_name"),
-                            'email', 'contact_no', 'address', 'cmmsn_percent', ]);
+                            'email', 'contact_no', 'address', 'cmmsn_percent','fixed_commission','global_commission',]);
 
             return Datatables::of($users)
                 ->addColumn(
                     'action',
                     '@can("user.update")
-                    <button type="button" data-href="{{action(\'App\Http\Controllers\SalesCommissionAgentController@edit\', [$id])}}" data-container=".commission_agent_modal" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline tw-dw-btn-primary"><i class="glyphicon glyphicon-edit"></i> @lang("messages.edit")</button>
+                    <button type="button" data-href="{{action(\'App\Http\Controllers\SalesCommissionAgentController@edit\', [$id])}}" data-container=".commission_agent_modal" id="edit_commsn_agnt_button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline tw-dw-btn-primary"><i class="glyphicon glyphicon-edit"></i> @lang("messages.edit")</button>
                         &nbsp;
                         @endcan
                         @can("user.delete")
@@ -90,8 +90,10 @@ class SalesCommissionAgentController extends Controller
         }
 
         try {
-            $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent']);
+            $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent','fixed_commission','global_commission']);
             $input['cmmsn_percent'] = $this->commonUtil->num_uf($input['cmmsn_percent']);
+            $input['fixed_commission'] = $this->commonUtil->num_uf($input['fixed_commission']);
+            $input['global_commission'] = $this->commonUtil->num_uf($input['global_commission']);
             $business_id = $request->session()->get('user.business_id');
             $input['business_id'] = $business_id;
             $input['allow_login'] = 0;
@@ -146,8 +148,10 @@ class SalesCommissionAgentController extends Controller
 
         if (request()->ajax()) {
             try {
-                $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent']);
+                $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent','fixed_commission','global_commission']);
                 $input['cmmsn_percent'] = $this->commonUtil->num_uf($input['cmmsn_percent']);
+                $input['fixed_commission'] = $this->commonUtil->num_uf($input['fixed_commission']);
+                $input['global_commission'] = $this->commonUtil->num_uf($input['global_commission']);
                 $business_id = $request->session()->get('user.business_id');
 
                 $user = User::where('id', $id)
