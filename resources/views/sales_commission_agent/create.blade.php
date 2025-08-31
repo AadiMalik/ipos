@@ -62,7 +62,7 @@
       </div>
       <div class="col-md-6">
         <div class="form-group">
-          {!! Form::label('global_commission', 'Fixed Commission:') !!}
+          {!! Form::label('global_commission', 'Global Commission:') !!}
             {!! Form::text('global_commission', null, ['class' => 'form-control input_number', 'placeholder' => 'Sale Global Commission Percentage (%)', 'required' ]); !!}
         </div>
       </div>
