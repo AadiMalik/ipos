@@ -2679,6 +2679,58 @@ $name = e($row->name); // Escape for safety
     }
 
     /**
+     * Shows sell payment report
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function agentCommissionReport(Request $request)
+    {
+        if (! auth()->user()->can('purchase_n_sell_report.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+        $business_id = $request->session()->get('user.business_id');
+        if ($request->ajax()) {
+            if(!empty($request->get('business_id'))){
+                $business_id = $request->get('business_id');
+            }
+            $commission_agent = User::where('is_cmmsn_agnt', 1)
+            ->where('business_id',$business_id)
+            ->get();
+            $transactions = Transaction::where('type', 'sell')
+            ->where('commission_agent','!=',null)->get();
+
+            $start_date = $request->get('start_date');
+            $end_date = $request->get('end_date');
+            if (! empty($start_date) && ! empty($end_date)) {
+                $transactions->whereBetween(DB::raw('date(created_at)'), [$start_date, $end_date]);
+            }
+            $data=[];
+            foreach($commission_agent as $item){
+                $total_sale = $transactions->where('commission_agent',$item->id)->sum('final_total');
+                $individual_comission = $total_sale  * $item->cmmsn_percent;
+                $global_commission=0;
+                if($total_sale>800000){
+                    $global_commission = $total_sale  * $item->global_commission;
+                }
+                $data[]=[
+                    "agent_name"=> $item->surname.' '.$item->first_name.' '.$item->last_name,
+                    "agent_email"=>$item->email??'N/A',
+                    "agent_contact_no"=>$item->contact_no??'N/A',
+                    "total_sale"=>$total_sale??0,
+                    "individual_commission"=>$individual_comission,
+                    "global_commission"=>$global_commission
+                ];
+            }
+
+            return Datatables::of($data)->make(true);
+        }
+        $business_locations = BusinessLocation::forDropdown($business_id);
+
+        return view('report.sale_agent_commission_report')
+            ->with(compact('business_locations'));
+    }
+
+    /**
      * Shows tables report
      *
      * @return \Illuminate\Http\Response

@@ -54,12 +54,12 @@
             {!! Form::text('cmmsn_percent', null, ['class' => 'form-control input_number', 'placeholder' => 'Sale Individual Commission Percentage (%)', 'required' ]); !!}
         </div>
       </div>
-      <div class="col-md-6">
+      <!-- <div class="col-md-6">
         <div class="form-group">
           {!! Form::label('fixed_commission', 'Fixed Commission:') !!}
             {!! Form::text('fixed_commission', null, ['class' => 'form-control input_number', 'placeholder' => 'Sale Fixed Commission Percentage (%)', 'required' ]); !!}
         </div>
-      </div>
+      </div> -->
       <div class="col-md-6">
         <div class="form-group">
           {!! Form::label('global_commission', 'Global Commission:') !!}

@@ -90,9 +90,9 @@ class SalesCommissionAgentController extends Controller
         }
 
         try {
-            $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent','fixed_commission','global_commission']);
+            $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent','global_commission']);
             $input['cmmsn_percent'] = $this->commonUtil->num_uf($input['cmmsn_percent']);
-            $input['fixed_commission'] = $this->commonUtil->num_uf($input['fixed_commission']);
+            // $input['fixed_commission'] = $this->commonUtil->num_uf($input['fixed_commission']);
             $input['global_commission'] = $this->commonUtil->num_uf($input['global_commission']);
             $business_id = $request->session()->get('user.business_id');
             $input['business_id'] = $business_id;
@@ -148,9 +148,9 @@ class SalesCommissionAgentController extends Controller
 
         if (request()->ajax()) {
             try {
-                $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent','fixed_commission','global_commission']);
+                $input = $request->only(['surname', 'first_name', 'last_name', 'email', 'address', 'contact_no', 'cmmsn_percent','global_commission']);
                 $input['cmmsn_percent'] = $this->commonUtil->num_uf($input['cmmsn_percent']);
-                $input['fixed_commission'] = $this->commonUtil->num_uf($input['fixed_commission']);
+                // $input['fixed_commission'] = $this->commonUtil->num_uf($input['fixed_commission']);
                 $input['global_commission'] = $this->commonUtil->num_uf($input['global_commission']);
                 $business_id = $request->session()->get('user.business_id');
 
