@@ -707,7 +707,7 @@ class AdminSidebarMenu
                         }
                         if (auth()->user()->can('sales_representative.view')) {
                             $sub->url(
-                                action([\App\Http\Controllers\ReportController::class, 'getSalesRepresentativeReport']),
+                                action([\App\Http\Controllers\ReportController::class, 'agentCommissionReport']),
                                 'Agent Commission Report',
                                 ['icon' => '', 'active' => request()->segment(2) == 'agent-commission-report']
                             );
