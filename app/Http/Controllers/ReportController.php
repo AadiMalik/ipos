@@ -2707,10 +2707,10 @@ $name = e($row->name); // Escape for safety
             $data=[];
             foreach($commission_agent as $item){
                 $total_sale = $transactions->where('commission_agent',$item->id)->sum('final_total');
-                $individual_comission = $total_sale  * $item->cmmsn_percent;
+                $individual_comission = $total_sale  * ($item->cmmsn_percent/100);
                 $global_commission=0;
                 if($total_sale>800000){
-                    $global_commission = $total_sale  * $item->global_commission;
+                    $global_commission = $total_sale  * ($item->global_commission/100);
                 }
                 $data[]=[
                     "agent_name"=> $item->surname.' '.$item->first_name.' '.$item->last_name,
