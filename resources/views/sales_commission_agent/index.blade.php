@@ -38,7 +38,7 @@
                             <th>@lang( 'lang_v1.contact_no' )</th>
                             <th>@lang( 'business.address' )</th>
                             <th>Individual Commission</th>
-                            <th>Fixed Commission</th>
+                            <!-- <th>Fixed Commission</th> -->
                             <th>Global Commission</th>
                             <th>@lang( 'messages.action' )</th>
                         </tr>
@@ -55,4 +55,7 @@
 </section>
 <!-- /.content -->
 
+@endsection
+@section('javascript')
+    <script src="{{ asset('js/commission_agent.js') }}"></script>
 @endsection

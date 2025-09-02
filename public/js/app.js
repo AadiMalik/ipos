@@ -1679,29 +1679,7 @@ $(document).ready(function() {
         });
     });
 
-    //Sales commission agent
-    var sales_commission_agent_table = $('#sales_commission_agent_table').DataTable({
-        processing: true,
-        serverSide: true,
-        ajax: '/sales-commission-agents',
-        columnDefs: [
-            {
-                targets: 2,
-                orderable: false,
-                searchable: false,
-            },
-        ],
-        columns: [
-            { data: 'full_name' },
-            { data: 'email' },
-            { data: 'contact_no' },
-            { data: 'address' },
-            { data: 'cmmsn_percent' },
-            { data: 'fixed_commission' },
-            { data: 'global_commission' },
-            { data: 'action' },
-        ],
-    });
+    
     $('div.commission_agent_modal').on('shown.bs.modal', function(e) {
         $('form#sale_commission_agent_form')
             .submit(function(e) {
@@ -1730,33 +1708,7 @@ $(document).ready(function() {
                 },
             });
     });
-    $(document).on('click', 'button.delete_commsn_agnt_button', function() {
-        swal({
-            title: LANG.sure,
-            icon: 'warning',
-            buttons: true,
-            dangerMode: true,
-        }).then(willDelete => {
-            if (willDelete) {
-                var href = $(this).data('href');
-                var data = $(this).serialize();
-                $.ajax({
-                    method: 'DELETE',
-                    url: href,
-                    dataType: 'json',
-                    data: data,
-                    success: function(result) {
-                        if (result.success == true) {
-                            toastr.success(result.msg);
-                            sales_commission_agent_table.ajax.reload();
-                        } else {
-                            toastr.error(result.msg);
-                        }
-                    },
-                });
-            }
-        });
-    });
+    
 
     $('button#full_screen').click(function(e) {
         element = document.documentElement;
