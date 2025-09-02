@@ -1331,7 +1331,13 @@ $(document).ready(function () {
         ],
         fnDrawCallback: function (oSettings) {
             var total_sale = sum_table_col($('#agent_commission_report_table'), 'total_sale');
+            var total_individual = sum_table_col($('#agent_commission_report_table'), 'individual_commission');
+            var total_global = sum_table_col($('#agent_commission_report_table'), 'global_commission');
+
+            // update footer cells
             $('#footer_total_sale').text(total_sale);
+            $('#footer_total_individual').text(total_individual);
+            $('#footer_total_global').text(total_global);
             __currency_convert_recursively($('#agent_commission_report_table'));
         },
     });
