@@ -2717,8 +2717,8 @@ $name = e($row->name); // Escape for safety
                     "agent_email"=>$item->email??'N/A',
                     "agent_contact_no"=>$item->contact_no??'N/A',
                     "total_sale"=>$total_sale??0,
-                    "individual_commission"=>$individual_comission,
-                    "global_commission"=>$global_commission
+                    "individual_commission"=>round($individual_comission,2),
+                    "global_commission"=>round($global_commission,2)
                 ];
             }
 
