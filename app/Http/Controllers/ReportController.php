@@ -2690,20 +2690,26 @@ $name = e($row->name); // Escape for safety
         }
         $business_id = $request->session()->get('user.business_id');
         if ($request->ajax()) {
-            if(!empty($request->get('business_id'))){
-                $business_id = $request->get('business_id');
-            }
+            
             $commission_agent = User::where('is_cmmsn_agnt', 1)
             ->where('business_id',$business_id)
             ->get();
-            $transactions = Transaction::where('type', 'sell')
-            ->where('commission_agent','!=',null)->get();
 
-            $start_date = $request->get('start_date');
-            $end_date = $request->get('end_date');
-            if (! empty($start_date) && ! empty($end_date)) {
-                $transactions->whereBetween(DB::raw('date(created_at)'), [$start_date, $end_date]);
+            $transactions = Transaction::where('type', 'sell')
+            ->whereNotNull('commission_agent');
+
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $transactions->whereBetween(DB::raw('date(created_at)'), [
+                    $request->get('start_date'),
+                    $request->get('end_date')
+                ]);
             }
+            if ($request->filled('location_id')) {
+                $transactions->where('location_id', $request->get('location_id'));
+            }
+
+            $transactions = $transactions->get();
+
             $data=[];
             foreach($commission_agent as $item){
                 $total_sale = $transactions->where('commission_agent',$item->id)->sum('final_total');

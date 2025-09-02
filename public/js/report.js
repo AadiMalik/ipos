@@ -1299,14 +1299,13 @@ $(document).ready(function () {
             url: '/reports/agent-commission-report',
             data: function (d) {
                 d.location_id = $('select#location_id').val();
-                d.customer_group_id = $('select#customer_group_filter').val();
                 var start = '';
                 var end = '';
-                if ($('input#spr_date_filter').val()) {
-                    start = $('input#spr_date_filter')
+                if ($('input#acr_date_filter').val()) {
+                    start = $('input#acr_date_filter')
                         .data('daterangepicker')
                         .startDate.format('YYYY-MM-DD');
-                    end = $('input#spr_date_filter')
+                    end = $('input#acr_date_filter')
                         .data('daterangepicker')
                         .endDate.format('YYYY-MM-DD');
                 }
@@ -1330,16 +1329,29 @@ $(document).ready(function () {
             { data: 'global_commission', name: 'global_commission' },
         ],
         fnDrawCallback: function (oSettings) {
-            var total_sale = sum_table_col($('#agent_commission_report_table'), 'total_sale');
-            var total_individual = sum_table_col($('#agent_commission_report_table'), 'individual_commission');
-            var total_global = sum_table_col($('#agent_commission_report_table'), 'global_commission');
-
-            // update footer cells
-            $('#footer_total_sale').text(total_sale);
-            $('#footer_total_individual').text(total_individual);
-            $('#footer_total_global').text(total_global);
+            var api = this.api();
+        
+            // sum specific columns by index
+            var total_sale = api.column(4, { page: 'current' }).data().reduce(function (a, b) {
+                return parseFloat(a) + parseFloat(b);
+            }, 0);
+        
+            var total_individual = api.column(5, { page: 'current' }).data().reduce(function (a, b) {
+                return parseFloat(a) + parseFloat(b);
+            }, 0);
+        
+            var total_global = api.column(6, { page: 'current' }).data().reduce(function (a, b) {
+                return parseFloat(a) + parseFloat(b);
+            }, 0);
+        
+            // update footer
+            $('#footer_total_sale').text(total_sale.toFixed(2));
+            $('#footer_total_individual').text(total_individual.toFixed(2));
+            $('#footer_total_global').text(total_global.toFixed(2));
+        
+            // re-apply currency formatting
             __currency_convert_recursively($('#agent_commission_report_table'));
-        },
+        }
     });
     //Sell Payment Report
     sell_payment_report = $('table#sell_payment_report_table').DataTable({
@@ -1355,7 +1367,7 @@ $(document).ready(function () {
                 d.customer_group_id = $('select#customer_group_filter').val();
                 var start = '';
                 var end = '';
-                if ($('input#spr_date_filter').val()) {
+                if ($('input#acr_date_filter').val()) {
                     start = $('input#spr_date_filter')
                         .data('daterangepicker')
                         .startDate.format('YYYY-MM-DD');
