@@ -1946,8 +1946,10 @@ $name = e($row->name); // Escape for safety
                 ->leftjoin('tax_rates', 'transaction_sell_lines.tax_id', '=', 'tax_rates.id')
                 ->leftjoin('units as u', 'p.unit_id', '=', 'u.id')
                 ->where('t.business_id', $business_id)
-                ->where('t.type', 'sell')
-                ->orWhere('t.type','sell_return')
+                ->where(function ($q) {
+                    $q->where('t.type', 'sell')
+                      ->orWhere('t.type', 'sell_return');
+                })
                 ->where('t.status', 'final')
                 ->with('transaction.payment_lines')
                 ->select(

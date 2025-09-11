@@ -79,6 +79,7 @@
 				        </tr>
 				        @php 
 				          $total = 0.00;
+					    $total_quantity=0.00;
 				        @endphp
 				        @foreach($sell_transfer->sell_lines as $sell_lines)
 				          <tr>
@@ -108,8 +109,13 @@
 				          </tr>
 				          @php 
 				            $total += ($sell_lines->unit_price_inc_tax * $sell_lines->quantity);
+						$total_quantity+=$sell_lines->quantity;
 				          @endphp
 				        @endforeach
+					  <tr>
+						<td colspan="2" style="text-align: right;"><b>Total Quantity:</b></td>
+						<td>{{$total_quantity??0}} Pc(s)</td>
+					  </tr>
 				      </table>
 				    </div>
 				  </div>
