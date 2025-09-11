@@ -239,6 +239,7 @@
             <td colspan="2"><b>Total</b></td>
             <td></td>
             <td>{{$purchase_quantity??0}} Pc(s)</td>
+            <td colspan="10"></td>
           </tr>
         </table>
       </div>
