@@ -683,6 +683,12 @@ class AdminSidebarMenu
                                 'Transaction Report',
                                 ['icon' => '', 'active' => request()->segment(2) == 'sell-payment-report']
                             );
+
+                            $sub->url(
+                                action([\App\Http\Controllers\ReportController::class, 'getCreditSalePayment']),
+                                'Credit Sale Payment Report',
+                                ['icon' => '', 'active' => request()->segment(2) == 'credit-sale-payment-report']
+                            );
                         }
                         if (in_array('expenses', $enabled_modules) && auth()->user()->can('expense_report.view')) {
                             $sub->url(

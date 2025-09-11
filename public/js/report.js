@@ -16,6 +16,21 @@ $(document).ready(function () {
         updatePurchaseSell();
     }
 
+    if ($('#credit_sale_payment_date_filter').length == 1) {
+        $('#credit_sale_payment_date_filter').daterangepicker(dateRangeSettings, function (start, end) {
+            $('#credit_sale_payment_date_filter span').html(
+                start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
+            );
+            updateCreditSalePayment();
+        });
+        $('#credit_sale_payment_date_filter').on('cancel.daterangepicker', function (ev, picker) {
+            $('#credit_sale_payment_date_filter').html(
+                '<i class="fa fa-calendar"></i> ' + LANG.filter_by_date
+            );
+        });
+        updateCreditSalePayment();
+    }
+
     if ($('#scr_date_filter').length == 1) {
         $('#scr_date_filter').daterangepicker(dateRangeSettings, function (start, end) {
             $('#scr_date_filter').val(
@@ -285,6 +300,10 @@ $(document).ready(function () {
 
     $('#purchase_sell_location_filter').change(function () {
         updatePurchaseSell();
+    });
+
+    $('#credit_sale_payment_location_filter').change(function () {
+        updateCreditSalePayment();
     });
 
     //Stock Adjustment Report
@@ -908,12 +927,16 @@ $(document).ready(function () {
                 $('.nav-tabs li.active').find('a[data-toggle="tab"]').trigger('shown.bs.tab');
             }
         );
+        $('#product_sr_date_filter').on('apply.daterangepicker', function (ev, picker) {
+            picker.hide();
+        });
         $('#product_sr_date_filter').on('cancel.daterangepicker', function (ev, picker) {
             $('#product_sr_date_filter').val('');
             product_sell_report.ajax.reload();
             product_sell_grouped_report.ajax.reload();
             product_sell_report_with_purchase_table.ajax.reload();
             $('.nav-tabs li.active').find('a[data-toggle="tab"]').trigger('shown.bs.tab');
+            picker.hide();
         });
 
         $('#product_sr_start_time, #product_sr_end_time').datetimepicker({
@@ -995,6 +1018,18 @@ $(document).ready(function () {
             },
         });
     }
+    // when a predefined range (Today, Yesterday, etc.) is clicked
+    $(document).on('click', '.ranges li', function () {
+        var picker = $('#product_sr_date_filter').data('daterangepicker');
+        if (picker) {
+            // apply the selected range
+            picker.callback(picker.startDate, picker.endDate, picker.chosenLabel);
+            $('#product_sr_date_filter').trigger('apply.daterangepicker', picker);
+
+        }
+        // close dropdown properly
+        picker.hide();
+    });
 
     var is_lot_enabled = $('#lot_enabled').length > 0 ? true : false;
     product_sell_report_with_purchase_table = $('table#product_sell_report_with_purchase_table').DataTable({
@@ -1329,25 +1364,25 @@ $(document).ready(function () {
         ],
         fnDrawCallback: function (oSettings) {
             var api = this.api();
-        
+
             // sum specific columns by index
             var total_sale = api.column(4, { page: 'current' }).data().reduce(function (a, b) {
                 return parseFloat(a) + parseFloat(b);
             }, 0);
-        
+
             var total_individual = api.column(5, { page: 'current' }).data().reduce(function (a, b) {
                 return parseFloat(a) + parseFloat(b);
             }, 0);
-        
+
             var total_global = api.column(6, { page: 'current' }).data().reduce(function (a, b) {
                 return parseFloat(a) + parseFloat(b);
             }, 0);
-        
+
             // update footer
             $('#footer_total_sale').text(total_sale.toFixed(2));
             $('#footer_total_individual').text(total_individual.toFixed(2));
             $('#footer_total_global').text(total_global.toFixed(2));
-        
+
             // re-apply currency formatting
             __currency_convert_recursively($('#agent_commission_report_table'));
         }
@@ -1648,6 +1683,53 @@ function updatePurchaseSell() {
         },
     });
 }
+function updateSelectedLocationName() {
+    var name = $('#credit_sale_payment_location_filter option:selected').text();
+    $('.location_name').text(name);
+}
+//credit sale payment report
+function updateCreditSalePayment() {
+    var start = $('#credit_sale_payment_date_filter')
+        .data('daterangepicker')
+        .startDate.format('YYYY-MM-DD');
+    var end = $('#credit_sale_payment_date_filter')
+        .data('daterangepicker')
+        .endDate.format('YYYY-MM-DD');
+    var location_id = $('#credit_sale_payment_location_filter').val();
+
+    var data = { start_date: start, end_date: end, location_id: location_id };
+    updateSelectedLocationName();
+    $.ajax({
+        method: 'GET',
+        url: '/reports/credit-sale-payment-report',
+        dataType: 'json',
+        data: data,
+        success: function (data) {
+            // Reset tables
+            $('#payment_method_table tbody').empty();
+            $('#customer_payment_table tbody').empty();
+
+            var pm_total = 0;
+            $.each(data.payment_method_payments, function (method, amount) {
+                $('#payment_method_table tbody').append(
+                    '<tr><td>' + method + '</td><td class="text-right">' + __currency_trans_from_en(amount, true) + '</td></tr>'
+                );
+                pm_total += parseFloat(amount);
+            });
+            $('#payment_method_total').text(__currency_trans_from_en(pm_total, true));
+
+            var c_total = 0;
+            $.each(data.customer_payments, function (customer, amount) {
+                $('#customer_payment_table tbody').append(
+                    '<tr><td>' + customer + '</td><td class="text-right">' + __currency_trans_from_en(amount, true) + '</td></tr>'
+                );
+                c_total += parseFloat(amount);
+            });
+            $('#customer_payment_total').text(__currency_trans_from_en(c_total, true));
+        },
+    });
+}
+
 
 function get_stock_details(rowData) {
     var div = $('<div/>')

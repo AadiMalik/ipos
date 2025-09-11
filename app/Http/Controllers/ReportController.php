@@ -102,12 +102,12 @@ class ReportController extends Controller
             $location_id = ! empty(request()->input('location_id')) ? request()->input('location_id') : null;
             $start_date = ! empty(request()->input('start_date')) ? request()->input('start_date') : $fy['start'];
             $end_date = ! empty(request()->input('end_date')) ? request()->input('end_date') : $fy['end'];
-    
+
             $user_id = request()->input('user_id') ?? null;
 
             $permitted_locations = auth()->user()->permitted_locations();
             $data = $this->transactionUtil->getProfitLossDetails($business_id, $location_id, $start_date, $end_date, $user_id, $permitted_locations);
-    
+
             // $data['closing_stock'] = $data['closing_stock'] - $data['total_sell_return'];
 
             return view('report.partials.profit_loss_details', compact('data'))->render();
@@ -148,7 +148,8 @@ class ReportController extends Controller
             );
 
             $transaction_types = [
-                'purchase_return', 'sell_return',
+                'purchase_return',
+                'sell_return',
             ];
 
             $transaction_totals = $this->transactionUtil->getTransactionTotals(
@@ -167,7 +168,8 @@ class ReportController extends Controller
                 'due' => $sell_details['invoice_due'] - $purchase_details['purchase_due'],
             ];
 
-            return ['purchase' => $purchase_details,
+            return [
+                'purchase' => $purchase_details,
                 'sell' => $sell_details,
                 'total_purchase_return' => $total_purchase_return_inc_tax,
                 'total_sell_return' => $total_sell_return_inc_tax,
@@ -178,8 +180,74 @@ class ReportController extends Controller
         $business_locations = BusinessLocation::forDropdown($business_id, true);
 
         return view('report.purchase_sell')
-                    ->with(compact('business_locations'));
+            ->with(compact('business_locations'));
     }
+
+    /**
+     * Shows credit sale payment report
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function getCreditSalePayment(Request $request)
+    {
+        if (! auth()->user()->can('purchase_n_sell_report.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $location_id = $request->get('location_id', null);
+
+            $query = TransactionPayment::leftJoin('transactions as t', function ($join) use ($business_id) {
+                $join->on('transaction_payments.transaction_id', '=', 't.id')
+                    ->where('t.business_id', $business_id)
+                    ->where('t.type', 'sell');
+            })
+                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
+                ->where('transaction_payments.business_id', $business_id);
+
+            // ✅ Apply date filter
+            $start_date = $request->get('start_date');
+            $end_date = $request->get('end_date');
+            if (! empty($start_date) && ! empty($end_date)) {
+                $query->whereBetween(DB::raw('date(paid_on)'), [$start_date, $end_date]);
+            }
+
+            // ✅ Location filter
+            $permitted_locations = auth()->user()->permitted_locations();
+            if ($permitted_locations != 'all') {
+                $query->whereIn('t.location_id', $permitted_locations);
+            }
+            if (! empty($location_id)) {
+                $query->where('t.location_id', $location_id);
+            }
+
+            // ✅ Payment Method Wise Totals
+            $payment_method_payments = (clone $query)
+                ->select('transaction_payments.method', DB::raw('SUM(transaction_payments.amount) as total'))
+                ->groupBy('transaction_payments.method')
+                ->pluck('total', 'method')
+                ->toArray();
+
+            // ✅ Customer Wise Totals
+            $customer_payments = (clone $query)
+                ->select('c.name as customer_name', DB::raw('SUM(transaction_payments.amount) as total'))
+                ->groupBy('c.id', 'c.name')
+                ->pluck('total', 'customer_name')
+                ->toArray();
+            return [
+                'payment_method_payments' => $payment_method_payments,
+                'customer_payments' => $customer_payments,
+            ];
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id);
+
+        return view('report.credit_sale_payment_report')
+            ->with(compact('business_locations'));
+    }
+
 
     /**
      * Shows report for Supplier
@@ -251,11 +319,11 @@ class ReportController extends Controller
                 ->editColumn('name', function ($row) {
                     $name = $row->name;
                     if (! empty($row->supplier_business_name)) {
-                        $name .= ', '.$row->supplier_business_name;
+                        $name .= ', ' . $row->supplier_business_name;
                     }
 
-                    return '<a href="'.action([\App\Http\Controllers\ContactController::class, 'show'], [$row->id]).'" target="_blank" class="no-print">'.
-                            $name.
+                    return '<a href="' . action([\App\Http\Controllers\ContactController::class, 'show'], [$row->id]) . '" target="_blank" class="no-print">' .
+                        $name .
                         '</a>';
                 })
                 ->editColumn(
@@ -288,7 +356,7 @@ class ReportController extends Controller
 
                     $due_formatted = $this->transactionUtil->num_f($due, true);
 
-                    return '<span class="total_due" data-orig-value="'.$due.'">'.$due_formatted.'</span>';
+                    return '<span class="total_due" data-orig-value="' . $due . '">' . $due_formatted . '</span>';
                 })
                 ->addColumn(
                     'opening_balance_due',
@@ -301,7 +369,7 @@ class ReportController extends Controller
                 ->filterColumn('name', function ($query, $keyword) {
                     $query->where(function ($q) use ($keyword) {
                         $q->where('contacts.name', 'like', "%{$keyword}%")
-                        ->orWhere('contacts.supplier_business_name', 'like', "%{$keyword}%");
+                            ->orWhere('contacts.supplier_business_name', 'like', "%{$keyword}%");
                     });
                 })
                 ->rawColumns(['total_purchase', 'total_invoice', 'due', 'name', 'total_purchase_return', 'total_sell_return', 'opening_balance_due'])
@@ -320,9 +388,9 @@ class ReportController extends Controller
         $contact_dropdown = Contact::contactDropdown($business_id, false, false);
 
         return view('report.contact')
-        ->with(compact('customer_group', 'types', 'business_locations', 'contact_dropdown'));
+            ->with(compact('customer_group', 'types', 'business_locations', 'contact_dropdown'));
     }
-    
+
     public function getCustomerReport(Request $request)
     {
         if (! auth()->user()->can('contacts_report.view')) {
@@ -367,19 +435,19 @@ class ReportController extends Controller
 
             return Datatables::of($contacts)
                 ->editColumn('name', function ($row) {
-$name = e($row->name); // Escape for safety
+                    $name = e($row->name); // Escape for safety
                     if ($row->contact_status == 'inactive') {
-                        $name .= ' <small class="label pull-right bg-red no-print">'.__('lang_v1.inactive').'</small>';
+                        $name .= ' <small class="label pull-right bg-red no-print">' . __('lang_v1.inactive') . '</small>';
                     }
                     if (! empty($row->converted_by)) {
                         $name .= ' <span class="label bg-info label-round no-print" data-toggle="tooltip" title="Converted from leads"><i class="fas fa-sync-alt"></i></span>';
                     }
-                    return '<a href="'.action([\App\Http\Controllers\ContactController::class, 'show'], [$row->id]).'" target="_blank" class="no-print">'.
-                            $name.
+                    return '<a href="' . action([\App\Http\Controllers\ContactController::class, 'show'], [$row->id]) . '" target="_blank" class="no-print">' .
+                        $name .
                         '</a>';
                 })
                 ->addColumn('address', function ($row) {
-                    return $row->address_line_1.' '.$row->address_line_2;
+                    return $row->address_line_1 . ' ' . $row->address_line_2;
                 })
                 ->addColumn('pep_type', function ($row) {
                     return e($row->pep_type);
@@ -389,14 +457,14 @@ $name = e($row->name); // Escape for safety
                 })
                 ->addColumn('passport_picture', function ($row) {
                     if (!empty($row->passport_picture)) {
-                        return '<a href="'.asset($row->passport_picture).'" target="_blank"><img src="'.asset($row->passport_picture).'" height="40" /></a>';
+                        return '<a href="' . asset($row->passport_picture) . '" target="_blank"><img src="' . asset($row->passport_picture) . '" height="40" /></a>';
                     }
                     return '';
                 })
                 ->addColumn('created_at', function ($row) {
                     return $row->created_at->format('d-m-Y H:i:s');
                 })
-                ->rawColumns(['name','address', 'pep_type', 'risk_rating', 'passport_picture','created_at'])
+                ->rawColumns(['name', 'address', 'pep_type', 'risk_rating', 'passport_picture', 'created_at'])
                 ->make(true);
         }
 
@@ -406,7 +474,7 @@ $name = e($row->name); // Escape for safety
         $contact_dropdown = Contact::contactDropdown($business_id, false, false);
 
         return view('report.contact_report')
-        ->with(compact('business_locations', 'contact_dropdown'));
+            ->with(compact('business_locations', 'contact_dropdown'));
     }
 
     /**
@@ -423,10 +491,10 @@ $name = e($row->name); // Escape for safety
         $business_id = $request->session()->get('user.business_id');
 
         $selling_price_groups = SellingPriceGroup::where('business_id', $business_id)
-                                                ->get();
+            ->get();
         $allowed_selling_price_group = false;
         foreach ($selling_price_groups as $selling_price_group) {
-            if (auth()->user()->can('selling_price_group.'.$selling_price_group->id)) {
+            if (auth()->user()->can('selling_price_group.' . $selling_price_group->id)) {
                 $allowed_selling_price_group = true;
                 break;
             }
@@ -437,8 +505,21 @@ $name = e($row->name); // Escape for safety
             $show_manufacturing_data = 0;
         }
         if ($request->ajax()) {
-            $filters = request()->only(['location_id', 'category_id', 'sub_category_id', 'brand_id', 'unit_id', 'tax_id', 'type',
-                'only_mfg_products', 'active_state',  'not_for_selling', 'repair_model_id', 'product_id', 'active_state', ]);
+            $filters = request()->only([
+                'location_id',
+                'category_id',
+                'sub_category_id',
+                'brand_id',
+                'unit_id',
+                'tax_id',
+                'type',
+                'only_mfg_products',
+                'active_state',
+                'not_for_selling',
+                'repair_model_id',
+                'product_id',
+                'active_state',
+            ]);
 
             $filters['not_for_selling'] = isset($filters['not_for_selling']) && $filters['not_for_selling'] == 'true' ? 1 : 0;
 
@@ -460,7 +541,7 @@ $name = e($row->name); // Escape for safety
                     if ($row->enable_stock) {
                         $stock = $row->stock ? $row->stock : 0;
 
-                        return  '<span class="current_stock" data-orig-value="'.(float) $stock.'" data-unit="'.$row->unit.'"> '.$this->transactionUtil->num_f($stock, false, null, true).'</span>'.' '.$row->unit;
+                        return  '<span class="current_stock" data-orig-value="' . (float) $stock . '" data-unit="' . $row->unit . '"> ' . $this->transactionUtil->num_f($stock, false, null, true) . '</span>' . ' ' . $row->unit;
                     } else {
                         return '--';
                     }
@@ -471,14 +552,14 @@ $name = e($row->name); // Escape for safety
                     return $name;
                 })
                 ->addColumn('action', function ($row) {
-                    return '<a class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max " href="'.action([\App\Http\Controllers\ProductController::class, 'productStockHistory'], [$row->product_id]).
-                    '?location_id='.$row->location_id.'&variation_id='.$row->variation_id.
-                    '"><i class="fas fa-history"></i> '.__('lang_v1.product_stock_history').'</a>';
+                    return '<a class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max " href="' . action([\App\Http\Controllers\ProductController::class, 'productStockHistory'], [$row->product_id]) .
+                        '?location_id=' . $row->location_id . '&variation_id=' . $row->variation_id .
+                        '"><i class="fas fa-history"></i> ' . __('lang_v1.product_stock_history') . '</a>';
                 })
                 ->addColumn('variation', function ($row) {
                     $variation = '';
                     if ($row->type == 'variable') {
-                        $variation .= $row->product_variation.'-'.$row->variation_name;
+                        $variation .= $row->product_variation . '-' . $row->variation_name;
                     }
 
                     return $variation;
@@ -489,7 +570,7 @@ $name = e($row->name); // Escape for safety
                         $total_sold = (float) $row->total_sold;
                     }
 
-                    return '<span data-is_quantity="true" class="total_sold" data-orig-value="'.$total_sold.'" data-unit="'.$row->unit.'" >'.$this->transactionUtil->num_f($total_sold, false, null, true).'</span> '.$row->unit;
+                    return '<span data-is_quantity="true" class="total_sold" data-orig-value="' . $total_sold . '" data-unit="' . $row->unit . '" >' . $this->transactionUtil->num_f($total_sold, false, null, true) . '</span> ' . $row->unit;
                 })
                 ->editColumn('total_transfered', function ($row) {
                     $total_transfered = 0;
@@ -497,7 +578,7 @@ $name = e($row->name); // Escape for safety
                         $total_transfered = (float) $row->total_transfered;
                     }
 
-                    return '<span class="total_transfered" data-orig-value="'.$total_transfered.'" data-unit="'.$row->unit.'" >'.$this->transactionUtil->num_f($total_transfered, false, null, true).'</span> '.$row->unit;
+                    return '<span class="total_transfered" data-orig-value="' . $total_transfered . '" data-unit="' . $row->unit . '" >' . $this->transactionUtil->num_f($total_transfered, false, null, true) . '</span> ' . $row->unit;
                 })
 
                 ->editColumn('total_adjusted', function ($row) {
@@ -506,7 +587,7 @@ $name = e($row->name); // Escape for safety
                         $total_adjusted = (float) $row->total_adjusted;
                     }
 
-                    return '<span class="total_adjusted" data-orig-value="'.$total_adjusted.'" data-unit="'.$row->unit.'" >'.$this->transactionUtil->num_f($total_adjusted, false, null, true).'</span> '.$row->unit;
+                    return '<span class="total_adjusted" data-orig-value="' . $total_adjusted . '" data-unit="' . $row->unit . '" >' . $this->transactionUtil->num_f($total_adjusted, false, null, true) . '</span> ' . $row->unit;
                 })
                 ->editColumn('unit_price', function ($row) use ($allowed_selling_price_group) {
                     $html = '';
@@ -515,15 +596,15 @@ $name = e($row->name); // Escape for safety
                     }
 
                     if ($allowed_selling_price_group) {
-                        $html .= ' <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary tw-w-max btn-modal no-print" data-container=".view_modal" data-href="'.action([\App\Http\Controllers\ProductController::class, 'viewGroupPrice'], [$row->product_id]).'">'.__('lang_v1.view_group_prices').'</button>';
+                        $html .= ' <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary tw-w-max btn-modal no-print" data-container=".view_modal" data-href="' . action([\App\Http\Controllers\ProductController::class, 'viewGroupPrice'], [$row->product_id]) . '">' . __('lang_v1.view_group_prices') . '</button>';
                     }
 
                     return $html;
                 })
                 ->editColumn('stock_price', function ($row) {
                     $html = '<span class="total_stock_price" data-orig-value="'
-                        .$row->stock_price.'">'.
-                        $this->transactionUtil->num_f($row->stock_price, true).'</span>';
+                        . $row->stock_price . '">' .
+                        $this->transactionUtil->num_f($row->stock_price, true) . '</span>';
 
                     return $html;
                 })
@@ -532,7 +613,7 @@ $name = e($row->name); // Escape for safety
                     $unit_selling_price = (float) $row->group_price > 0 ? $row->group_price : $row->unit_price;
                     $stock_price = $stock * $unit_selling_price;
 
-                    return  '<span class="stock_value_by_sale_price" data-orig-value="'.(float) $stock_price.'" > '.$this->transactionUtil->num_f($stock_price, true).'</span>';
+                    return  '<span class="stock_value_by_sale_price" data-orig-value="' . (float) $stock_price . '" > ' . $this->transactionUtil->num_f($stock_price, true) . '</span>';
                 })
                 ->addColumn('potential_profit', function ($row) {
                     $stock = $row->stock ? $row->stock : 0;
@@ -540,7 +621,7 @@ $name = e($row->name); // Escape for safety
                     $stock_price_by_sp = $stock * $unit_selling_price;
                     $potential_profit = (float) $stock_price_by_sp - (float) $row->stock_price;
 
-                    return  '<span class="potential_profit" data-orig-value="'.(float) $potential_profit.'" > '.$this->transactionUtil->num_f($potential_profit, true).'</span>';
+                    return  '<span class="potential_profit" data-orig-value="' . (float) $potential_profit . '" > ' . $this->transactionUtil->num_f($potential_profit, true) . '</span>';
                 })
                 ->setRowClass(function ($row) {
                     return $row->enable_stock && $row->stock <= $row->alert_quantity ? 'bg-danger' : '';
@@ -552,9 +633,17 @@ $name = e($row->name); // Escape for safety
                 ->removeColumn('unit')
                 ->removeColumn('id');
 
-            $raw_columns = ['unit_price', 'total_transfered', 'total_sold',
-                'total_adjusted', 'stock', 'stock_price', 'stock_value_by_sale_price',
-                'potential_profit', 'action', ];
+            $raw_columns = [
+                'unit_price',
+                'total_transfered',
+                'total_sold',
+                'total_adjusted',
+                'stock',
+                'stock_price',
+                'stock_value_by_sale_price',
+                'potential_profit',
+                'action',
+            ];
 
             if ($show_manufacturing_data) {
                 $datatable->editColumn('total_mfg_stock', function ($row) {
@@ -563,7 +652,7 @@ $name = e($row->name); // Escape for safety
                         $total_mfg_stock = (float) $row->total_mfg_stock;
                     }
 
-                    return '<span data-is_quantity="true" class="total_mfg_stock"  data-orig-value="'.$total_mfg_stock.'" data-unit="'.$row->unit.'" >'.$this->transactionUtil->num_f($total_mfg_stock, false, null, true).'</span> '.$row->unit;
+                    return '<span data-is_quantity="true" class="total_mfg_stock"  data-orig-value="' . $total_mfg_stock . '" data-unit="' . $row->unit . '" >' . $this->transactionUtil->num_f($total_mfg_stock, false, null, true) . '</span> ' . $row->unit;
                 });
                 $raw_columns[] = 'total_mfg_stock';
             }
@@ -574,7 +663,7 @@ $name = e($row->name); // Escape for safety
         $categories = Category::forDropdown($business_id, 'product');
         $brands = Brands::forDropdown($business_id);
         $units = Unit::where('business_id', $business_id)
-                            ->pluck('short_name', 'id');
+            ->pluck('short_name', 'id');
         $business_locations = BusinessLocation::forDropdown($business_id, true);
 
         return view('report.stock_report')
@@ -780,11 +869,11 @@ $name = e($row->name); // Escape for safety
                 // DB::raw("(SELECT SUM(quantity) FROM transaction_sell_lines LEFT JOIN transactions ON transaction_sell_lines.transaction_id=transactions.id WHERE transactions.status='final' $location_filter AND
                 //     transaction_sell_lines.variation_id=v.id) as total_sold")
             )
-                        ->groupBy('v.id')
-                        ->get();
+                ->groupBy('v.id')
+                ->get();
 
             return view('report.stock_details')
-                        ->with(compact('product_details'));
+                ->with(compact('product_details'));
         }
     }
 
@@ -807,23 +896,24 @@ $name = e($row->name); // Escape for safety
             $payment_types = $this->transactionUtil->payment_types(null, true, $business_id);
 
             $sells = Transaction::leftJoin('tax_rates as tr', 'transactions.tax_id', '=', 'tr.id')
-                            ->leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
+                ->leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
                 ->where('transactions.business_id', $business_id)
                 ->with(['payment_lines'])
-                ->select('c.name as contact_name',
-                        'c.supplier_business_name',
-                        'c.tax_number',
-                        'transactions.ref_no',
-                        'transactions.invoice_no',
-                        'transactions.transaction_date',
-                        'transactions.total_before_tax',
-                        'transactions.tax_id',
-                        'transactions.tax_amount',
-                        'transactions.id',
-                        'transactions.type',
-                        'transactions.discount_type',
-                        'transactions.discount_amount'
-                    );
+                ->select(
+                    'c.name as contact_name',
+                    'c.supplier_business_name',
+                    'c.tax_number',
+                    'transactions.ref_no',
+                    'transactions.invoice_no',
+                    'transactions.transaction_date',
+                    'transactions.total_before_tax',
+                    'transactions.tax_id',
+                    'transactions.tax_amount',
+                    'transactions.id',
+                    'transactions.type',
+                    'transactions.discount_type',
+                    'transactions.discount_amount'
+                );
             if ($type == 'sell') {
                 $sells->where('transactions.type', 'sell')
                     ->where('transactions.status', 'final')
@@ -851,7 +941,7 @@ $name = e($row->name); // Escape for safety
 
             if ($type == 'expense') {
                 $sells->where('transactions.type', 'expense')
-                        ->whereNotNull('transactions.tax_id');
+                    ->whereNotNull('transactions.tax_id');
             }
 
             $permitted_locations = auth()->user()->permitted_locations();
@@ -877,7 +967,7 @@ $name = e($row->name); // Escape for safety
                 $start = request()->start_date;
                 $end = request()->end_date;
                 $sells->whereDate('transactions.transaction_date', '>=', $start)
-                                ->whereDate('transactions.transaction_date', '<=', $end);
+                    ->whereDate('transactions.transaction_date', '<=', $end);
             }
             $datatable = Datatables::of($sells);
             $raw_cols = ['total_before_tax', 'discount_amount', 'contact_name', 'payment_methods'];
@@ -889,7 +979,7 @@ $name = e($row->name); // Escape for safety
                 }
             }
             foreach ($taxes as $tax) {
-                $col = 'tax_'.$tax['id'];
+                $col = 'tax_' . $tax['id'];
                 $raw_cols[] = $col;
                 $datatable->addColumn($col, function ($row) use ($tax, $type, $col, $group_taxes) {
                     $tax_amount = 0;
@@ -953,7 +1043,7 @@ $name = e($row->name); // Escape for safety
                     }
 
                     if ($tax_amount > 0) {
-                        return '<span class="display_currency '.$col.'" data-currency_symbol="true" data-orig-value="'.$tax_amount.'">'.$tax_amount.'</span>';
+                        return '<span class="display_currency ' . $col . '" data-currency_symbol="true" data-orig-value="' . $tax_amount . '">' . $tax_amount . '</span>';
                     } else {
                         return '';
                     }
@@ -961,25 +1051,25 @@ $name = e($row->name); // Escape for safety
             }
 
             $datatable->editColumn(
-                    'total_before_tax',
-                    function ($row) {
-                        return '<span class="total_before_tax" 
-                        data-orig-value="'.$row->total_before_tax.'">'.
-                        $this->transactionUtil->num_f($row->total_before_tax, true).'</span>';
-                    }
-                )->editColumn('discount_amount', function ($row) {
-                    $d = '';
-                    if ($row->discount_amount !== 0) {
-                        $symbol = $row->discount_type != 'percentage';
-                        $d .= $this->transactionUtil->num_f($row->discount_amount, $symbol);
+                'total_before_tax',
+                function ($row) {
+                    return '<span class="total_before_tax" 
+                        data-orig-value="' . $row->total_before_tax . '">' .
+                        $this->transactionUtil->num_f($row->total_before_tax, true) . '</span>';
+                }
+            )->editColumn('discount_amount', function ($row) {
+                $d = '';
+                if ($row->discount_amount !== 0) {
+                    $symbol = $row->discount_type != 'percentage';
+                    $d .= $this->transactionUtil->num_f($row->discount_amount, $symbol);
 
-                        if ($row->discount_type == 'percentage') {
-                            $d .= '%';
-                        }
+                    if ($row->discount_type == 'percentage') {
+                        $d .= '%';
                     }
+                }
 
-                    return $d;
-                })
+                return $d;
+            })
                 ->editColumn('transaction_date', '{{@format_datetime($transaction_date)}}')
                 ->editColumn('contact_name', '@if(!empty($supplier_business_name)) {{$supplier_business_name}},<br>@endif {{$contact_name}}')
                 ->addColumn('payment_methods', function ($row) use ($payment_types) {
@@ -992,13 +1082,13 @@ $name = e($row->name); // Escape for safety
                         $payment_method = __('lang_v1.checkout_multi_pay');
                     }
 
-                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="'.$payment_method.'" data-status-name="'.$payment_method.'">'.$payment_method.'</span>' : '';
+                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
 
                     return $html;
                 });
 
             return $datatable->rawColumns($raw_cols)
-                            ->make(true);
+                ->make(true);
         }
     }
 
@@ -1085,7 +1175,7 @@ $name = e($row->name); // Escape for safety
         $labels = [];
         foreach ($products as $product) {
             $values[] = (float) $product->total_unit_sold;
-            $labels[] = $product->product.' - '.$product->sku.' ('.$product->unit.')';
+            $labels[] = $product->product . ' - ' . $product->sku . ' (' . $product->unit . ')';
         }
 
         $chart = new CommonChart;
@@ -1095,11 +1185,11 @@ $name = e($row->name); // Escape for safety
         $categories = Category::forDropdown($business_id, 'product');
         $brands = Brands::forDropdown($business_id);
         $units = Unit::where('business_id', $business_id)
-                            ->pluck('short_name', 'id');
+            ->pluck('short_name', 'id');
         $business_locations = BusinessLocation::forDropdown($business_id, true);
 
         return view('report.trending_products')
-                    ->with(compact('chart', 'categories', 'brands', 'units', 'business_locations'));
+            ->with(compact('chart', 'categories', 'brands', 'units', 'business_locations'));
     }
 
     public function getTrendingProductsAjax()
@@ -1147,12 +1237,12 @@ $name = e($row->name); // Escape for safety
             ->dataset(__('report.total_expense'), 'column', $values);
 
         $categories = ExpenseCategory::where('business_id', $business_id)
-                            ->pluck('name', 'id');
+            ->pluck('name', 'id');
 
         $business_locations = BusinessLocation::forDropdown($business_id, true);
 
         return view('report.expense_report')
-                    ->with(compact('chart', 'categories', 'business_locations', 'expenses'));
+            ->with(compact('chart', 'categories', 'business_locations', 'expenses'));
     }
 
     /**
@@ -1171,7 +1261,7 @@ $name = e($row->name); // Escape for safety
         //Return the details in ajax call
         if ($request->ajax()) {
             $query = Transaction::where('business_id', $business_id)
-                            ->where('type', 'stock_adjustment');
+                ->where('type', 'stock_adjustment');
 
             //Check for permitted locations of a user
             $permitted_locations = auth()->user()->permitted_locations();
@@ -1201,7 +1291,7 @@ $name = e($row->name); // Escape for safety
         $business_locations = BusinessLocation::forDropdown($business_id, true);
 
         return view('report.stock_adjustment_report')
-                    ->with(compact('business_locations'));
+            ->with(compact('business_locations'));
     }
 
     /**
@@ -1219,53 +1309,53 @@ $name = e($row->name); // Escape for safety
         //Return the details in ajax call
         if ($request->ajax()) {
 
-        $start_date = request()->input('start_date');
-        $end_date = request()->input('end_date');
-        $user_id = request()->input('user_id');
+            $start_date = request()->input('start_date');
+            $end_date = request()->input('end_date');
+            $user_id = request()->input('user_id');
 
-        $permitted_locations = auth()->user()->permitted_locations();
+            $permitted_locations = auth()->user()->permitted_locations();
 
             $registers = $this->transactionUtil->registerReport($business_id, $permitted_locations, $start_date, $end_date, $user_id);
 
             return Datatables::of($registers)
                 ->editColumn('total_card_payment', function ($row) {
-                    return '<span data-orig-value="'.$row->total_card_payment.'" >'.$this->transactionUtil->num_f($row->total_card_payment, true).' ('.$row->total_card_slips.')</span>';
+                    return '<span data-orig-value="' . $row->total_card_payment . '" >' . $this->transactionUtil->num_f($row->total_card_payment, true) . ' (' . $row->total_card_slips . ')</span>';
                 })
                 ->editColumn('total_cheque_payment', function ($row) {
-                    return '<span data-orig-value="'.$row->total_cheque_payment.'" >'.$this->transactionUtil->num_f($row->total_cheque_payment, true).' ('.$row->total_cheques.')</span>';
+                    return '<span data-orig-value="' . $row->total_cheque_payment . '" >' . $this->transactionUtil->num_f($row->total_cheque_payment, true) . ' (' . $row->total_cheques . ')</span>';
                 })
                 ->editColumn('total_cash_payment', function ($row) {
-                    return '<span data-orig-value="'.$row->total_cash_payment.'" >'.$this->transactionUtil->num_f($row->total_cash_payment, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_cash_payment . '" >' . $this->transactionUtil->num_f($row->total_cash_payment, true) . '</span>';
                 })
                 ->editColumn('total_bank_transfer_payment', function ($row) {
-                    return '<span data-orig-value="'.$row->total_bank_transfer_payment.'" >'.$this->transactionUtil->num_f($row->total_bank_transfer_payment, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_bank_transfer_payment . '" >' . $this->transactionUtil->num_f($row->total_bank_transfer_payment, true) . '</span>';
                 })
                 ->editColumn('total_other_payment', function ($row) {
-                    return '<span data-orig-value="'.$row->total_other_payment.'" >'.$this->transactionUtil->num_f($row->total_other_payment, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_other_payment . '" >' . $this->transactionUtil->num_f($row->total_other_payment, true) . '</span>';
                 })
                 ->editColumn('total_advance_payment', function ($row) {
-                    return '<span data-orig-value="'.$row->total_advance_payment.'" >'.$this->transactionUtil->num_f($row->total_advance_payment, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_advance_payment . '" >' . $this->transactionUtil->num_f($row->total_advance_payment, true) . '</span>';
                 })
                 ->editColumn('total_custom_pay_1', function ($row) {
-                    return '<span data-orig-value="'.$row->total_custom_pay_1.'" >'.$this->transactionUtil->num_f($row->total_custom_pay_1, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_custom_pay_1 . '" >' . $this->transactionUtil->num_f($row->total_custom_pay_1, true) . '</span>';
                 })
                 ->editColumn('total_custom_pay_2', function ($row) {
-                    return '<span data-orig-value="'.$row->total_custom_pay_2.'" >'.$this->transactionUtil->num_f($row->total_custom_pay_2, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_custom_pay_2 . '" >' . $this->transactionUtil->num_f($row->total_custom_pay_2, true) . '</span>';
                 })
                 ->editColumn('total_custom_pay_3', function ($row) {
-                    return '<span data-orig-value="'.$row->total_custom_pay_3.'" >'.$this->transactionUtil->num_f($row->total_custom_pay_3, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_custom_pay_3 . '" >' . $this->transactionUtil->num_f($row->total_custom_pay_3, true) . '</span>';
                 })
                 ->editColumn('total_custom_pay_4', function ($row) {
-                    return '<span data-orig-value="'.$row->total_custom_pay_4.'" >'.$this->transactionUtil->num_f($row->total_custom_pay_4, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_custom_pay_4 . '" >' . $this->transactionUtil->num_f($row->total_custom_pay_4, true) . '</span>';
                 })
                 ->editColumn('total_custom_pay_5', function ($row) {
-                    return '<span data-orig-value="'.$row->total_custom_pay_5.'" >'.$this->transactionUtil->num_f($row->total_custom_pay_5, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_custom_pay_5 . '" >' . $this->transactionUtil->num_f($row->total_custom_pay_5, true) . '</span>';
                 })
                 ->editColumn('total_custom_pay_6', function ($row) {
-                    return '<span data-orig-value="'.$row->total_custom_pay_6.'" >'.$this->transactionUtil->num_f($row->total_custom_pay_6, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_custom_pay_6 . '" >' . $this->transactionUtil->num_f($row->total_custom_pay_6, true) . '</span>';
                 })
                 ->editColumn('total_custom_pay_7', function ($row) {
-                    return '<span data-orig-value="'.$row->total_custom_pay_7.'" >'.$this->transactionUtil->num_f($row->total_custom_pay_7, true).'</span>';
+                    return '<span data-orig-value="' . $row->total_custom_pay_7 . '" >' . $this->transactionUtil->num_f($row->total_custom_pay_7, true) . '</span>';
                 })
                 ->editColumn('closed_at', function ($row) {
                     if ($row->status == 'close') {
@@ -1280,7 +1370,7 @@ $name = e($row->name); // Escape for safety
                 ->addColumn('total', function ($row) {
                     $total = $row->total_card_payment + $row->total_cheque_payment + $row->total_cash_payment + $row->total_bank_transfer_payment + $row->total_other_payment + $row->total_advance_payment + $row->total_custom_pay_1 + $row->total_custom_pay_2 + $row->total_custom_pay_3 + $row->total_custom_pay_4 + $row->total_custom_pay_5 + $row->total_custom_pay_6 + $row->total_custom_pay_7;
 
-                    return '<span data-orig-value="'.$total.'" >'.$this->transactionUtil->num_f($total, true).'</span>';
+                    return '<span data-orig-value="' . $total . '" >' . $this->transactionUtil->num_f($total, true) . '</span>';
                 })
                 ->addColumn('action', '<button type="button" data-href="{{action(\'App\Http\Controllers\CashRegisterController@show\', [$id])}}" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max btn-modal" 
                     data-container=".view_register"><i class="fas fa-eye" aria-hidden="true"></i> @lang("messages.view")</button> @if($status != "close" && auth()->user()->can("close_cash_register"))<button type="button" data-href="{{action(\'App\Http\Controllers\CashRegisterController@getCloseRegister\', [$id])}}" class="tw-dw-btn tw-dw-btn-outline tw-dw-btn-xs tw-dw-btn-error tw-w-max btn-modal" 
@@ -1296,7 +1386,7 @@ $name = e($row->name); // Escape for safety
         $payment_types = $this->transactionUtil->payment_types(null, true, $business_id);
 
         return view('report.register_report')
-                    ->with(compact('users', 'payment_types'));
+            ->with(compact('users', 'payment_types'));
     }
 
     /**
@@ -1319,7 +1409,7 @@ $name = e($row->name); // Escape for safety
         $pos_settings = empty($business_details->pos_settings) ? $this->businessUtil->defaultPosSettings() : json_decode($business_details->pos_settings, true);
 
         return view('report.sales_representative')
-                ->with(compact('users', 'business_locations', 'pos_settings'));
+            ->with(compact('users', 'business_locations', 'pos_settings'));
     }
 
     /**
@@ -1425,7 +1515,8 @@ $name = e($row->name); // Escape for safety
                 //Get Commision
                 $total_commission = $commission_percentage * $payment_details['total_payment_with_commission'] / 100;
 
-                return ['total_payment_with_commission' => $payment_details['total_payment_with_commission'] ?? 0,
+                return [
+                    'total_payment_with_commission' => $payment_details['total_payment_with_commission'] ?? 0,
                     'total_commission' => $total_commission,
                     'commission_percentage' => $commission_percentage,
                 ];
@@ -1436,7 +1527,8 @@ $name = e($row->name); // Escape for safety
             //Get Commision
             $total_commission = $commission_percentage * $sell_details['total_sales_with_commission'] / 100;
 
-            return ['total_sales_with_commission' => $sell_details['total_sales_with_commission'],
+            return [
+                'total_sales_with_commission' => $sell_details['total_sales_with_commission'],
                 'total_commission' => $total_commission,
                 'commission_percentage' => $commission_percentage,
             ];
@@ -1466,31 +1558,31 @@ $name = e($row->name); // Escape for safety
                 '=',
                 't.id'
             )
-                            ->leftjoin(
-                                'products as p',
-                                'purchase_lines.product_id',
-                                '=',
-                                'p.id'
-                            )
-                            ->leftjoin(
-                                'variations as v',
-                                'purchase_lines.variation_id',
-                                '=',
-                                'v.id'
-                            )
-                            ->leftjoin(
-                                'product_variations as pv',
-                                'v.product_variation_id',
-                                '=',
-                                'pv.id'
-                            )
-                            ->leftjoin('business_locations as l', 't.location_id', '=', 'l.id')
-                            ->leftjoin('units as u', 'p.unit_id', '=', 'u.id')
-                            ->where('t.business_id', $business_id)
-                            //->whereNotNull('p.expiry_period')
-                            //->whereNotNull('p.expiry_period_type')
-                            //->whereNotNull('exp_date')
-                            ->where('p.enable_stock', 1);
+                ->leftjoin(
+                    'products as p',
+                    'purchase_lines.product_id',
+                    '=',
+                    'p.id'
+                )
+                ->leftjoin(
+                    'variations as v',
+                    'purchase_lines.variation_id',
+                    '=',
+                    'v.id'
+                )
+                ->leftjoin(
+                    'product_variations as pv',
+                    'v.product_variation_id',
+                    '=',
+                    'pv.id'
+                )
+                ->leftjoin('business_locations as l', 't.location_id', '=', 'l.id')
+                ->leftjoin('units as u', 'p.unit_id', '=', 'u.id')
+                ->where('t.business_id', $business_id)
+                //->whereNotNull('p.expiry_period')
+                //->whereNotNull('p.expiry_period_type')
+                //->whereNotNull('exp_date')
+                ->where('p.enable_stock', 1);
             // ->whereRaw('purchase_lines.quantity > purchase_lines.quantity_sold + quantity_adjusted + quantity_returned');
 
             $permitted_locations = auth()->user()->permitted_locations();
@@ -1502,11 +1594,11 @@ $name = e($row->name); // Escape for safety
             if (! empty($request->input('location_id'))) {
                 $location_id = $request->input('location_id');
                 $query->where('t.location_id', $location_id)
-                        //If filter by location then hide products not available in that location
-                        ->join('product_locations as pl', 'pl.product_id', '=', 'p.id')
-                        ->where(function ($q) use ($location_id) {
-                            $q->where('pl.location_id', $location_id);
-                        });
+                    //If filter by location then hide products not available in that location
+                    ->join('product_locations as pl', 'pl.product_id', '=', 'p.id')
+                    ->where(function ($q) use ($location_id) {
+                        $q->where('pl.location_id', $location_id);
+                    });
             }
 
             if (! empty($request->input('category_id'))) {
@@ -1547,18 +1639,18 @@ $name = e($row->name); // Escape for safety
                 'purchase_lines.id as purchase_line_id',
                 'purchase_lines.lot_number'
             )
-            ->having('stock_left', '>', 0)
-            ->groupBy('purchase_lines.variation_id')
-            ->groupBy('purchase_lines.exp_date')
-            ->groupBy('purchase_lines.lot_number');
+                ->having('stock_left', '>', 0)
+                ->groupBy('purchase_lines.variation_id')
+                ->groupBy('purchase_lines.exp_date')
+                ->groupBy('purchase_lines.lot_number');
 
             return Datatables::of($report)
                 ->editColumn('product', function ($row) {
                     if ($row->product_type == 'variable') {
-                        return $row->product.' - '.
-                        $row->product_variation.' - '.$row->variation.' ('.$row->sub_sku.')';
+                        return $row->product . ' - ' .
+                            $row->product_variation . ' - ' . $row->variation . ' (' . $row->sub_sku . ')';
                     } else {
-                        return $row->product.' ('.$row->sku.')';
+                        return $row->product . ' (' . $row->sku . ')';
                     }
                 })
                 ->editColumn('mfg_date', function ($row) {
@@ -1582,22 +1674,22 @@ $name = e($row->name); // Escape for safety
                 //     }
                 // })
                 ->editColumn('ref_no', function ($row) {
-                    return '<button type="button" data-href="'.action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
-                            .'" class="btn btn-link btn-modal" data-container=".view_modal"  >'.$row->ref_no.'</button>';
+                    return '<button type="button" data-href="' . action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
+                        . '" class="btn btn-link btn-modal" data-container=".view_modal"  >' . $row->ref_no . '</button>';
                 })
                 ->editColumn('stock_left', function ($row) {
-                    return '<span data-is_quantity="true" class="display_currency stock_left" data-currency_symbol=false data-orig-value="'.$row->stock_left.'" data-unit="'.$row->unit.'" >'.$row->stock_left.'</span> '.$row->unit;
+                    return '<span data-is_quantity="true" class="display_currency stock_left" data-currency_symbol=false data-orig-value="' . $row->stock_left . '" data-unit="' . $row->unit . '" >' . $row->stock_left . '</span> ' . $row->unit;
                 })
                 ->addColumn('edit', function ($row) {
-                    $html = '<button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary stock_expiry_edit_btn" data-transaction_id="'.$row->transaction_id.'" data-purchase_line_id="'.$row->purchase_line_id.'"> <i class="fa fa-edit"></i> '.__('messages.edit').
-                    '</button>';
+                    $html = '<button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary stock_expiry_edit_btn" data-transaction_id="' . $row->transaction_id . '" data-purchase_line_id="' . $row->purchase_line_id . '"> <i class="fa fa-edit"></i> ' . __('messages.edit') .
+                        '</button>';
 
                     if (! empty($row->exp_date)) {
                         $carbon_exp = \Carbon::createFromFormat('Y-m-d', $row->exp_date);
                         $carbon_now = \Carbon::now();
                         if ($carbon_now->diffInDays($carbon_exp, false) < 0) {
-                            $html .= ' <button type="button" class="btn btn-warning btn-xs remove_from_stock_btn" data-href="'.action([\App\Http\Controllers\StockAdjustmentController::class, 'removeExpiredStock'], [$row->purchase_line_id]).'"> <i class="fa fa-trash"></i> '.__('lang_v1.remove_from_stock').
-                            '</button>';
+                            $html .= ' <button type="button" class="btn btn-warning btn-xs remove_from_stock_btn" data-href="' . action([\App\Http\Controllers\StockAdjustmentController::class, 'removeExpiredStock'], [$row->purchase_line_id]) . '"> <i class="fa fa-trash"></i> ' . __('lang_v1.remove_from_stock') .
+                                '</button>';
                         }
                     }
 
@@ -1610,7 +1702,7 @@ $name = e($row->name); // Escape for safety
         $categories = Category::forDropdown($business_id, 'product');
         $brands = Brands::forDropdown($business_id);
         $units = Unit::where('business_id', $business_id)
-                            ->pluck('short_name', 'id');
+            ->pluck('short_name', 'id');
         $business_locations = BusinessLocation::forDropdown($business_id, true);
         $view_stock_filter = [
             \Carbon::now()->subDay()->format('Y-m-d') => __('report.expired'),
@@ -1623,7 +1715,7 @@ $name = e($row->name); // Escape for safety
         ];
 
         return view('report.stock_expiry_report')
-                ->with(compact('categories', 'brands', 'units', 'business_locations', 'view_stock_filter'));
+            ->with(compact('categories', 'brands', 'units', 'business_locations', 'view_stock_filter'));
     }
 
     /**
@@ -1647,16 +1739,16 @@ $name = e($row->name); // Escape for safety
                 '=',
                 't.id'
             )
-                                ->join(
-                                    'products as p',
-                                    'purchase_lines.product_id',
-                                    '=',
-                                    'p.id'
-                                )
-                                ->where('purchase_lines.id', $purchase_line_id)
-                                ->where('t.business_id', $business_id)
-                                ->select(['purchase_lines.*', 'p.name', 't.ref_no'])
-                                ->first();
+                ->join(
+                    'products as p',
+                    'purchase_lines.product_id',
+                    '=',
+                    'p.id'
+                )
+                ->where('purchase_lines.id', $purchase_line_id)
+                ->where('t.business_id', $business_id)
+                ->select(['purchase_lines.*', 'p.name', 't.ref_no'])
+                ->first();
 
             if (! empty($purchase_line)) {
                 if (! empty($purchase_line->exp_date)) {
@@ -1695,16 +1787,16 @@ $name = e($row->name); // Escape for safety
                     '=',
                     't.id'
                 )
-                                    ->join(
-                                        'products as p',
-                                        'purchase_lines.product_id',
-                                        '=',
-                                        'p.id'
-                                    )
-                                    ->where('purchase_lines.id', $input['purchase_line_id'])
-                                    ->where('t.business_id', $business_id)
-                                    ->select(['purchase_lines.*', 'p.name', 't.ref_no'])
-                                    ->first();
+                    ->join(
+                        'products as p',
+                        'purchase_lines.product_id',
+                        '=',
+                        'p.id'
+                    )
+                    ->where('purchase_lines.id', $input['purchase_line_id'])
+                    ->where('t.business_id', $business_id)
+                    ->select(['purchase_lines.*', 'p.name', 't.ref_no'])
+                    ->first();
 
                 if (! empty($purchase_line) && ! empty($input['exp_date'])) {
                     $purchase_line->exp_date = $this->productUtil->uf_date($input['exp_date']);
@@ -1713,15 +1805,17 @@ $name = e($row->name); // Escape for safety
 
                 DB::commit();
 
-                $output = ['success' => 1,
+                $output = [
+                    'success' => 1,
                     'msg' => __('lang_v1.updated_succesfully'),
                 ];
             }
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
+            \Log::emergency('File:' . $e->getFile() . 'Line:' . $e->getLine() . 'Message:' . $e->getMessage());
 
-            $output = ['success' => 0,
+            $output = [
+                'success' => 0,
                 'msg' => __('messages.something_went_wrong'),
             ];
         }
@@ -1744,11 +1838,11 @@ $name = e($row->name); // Escape for safety
 
         if ($request->ajax()) {
             $query = Transaction::leftjoin('customer_groups AS CG', 'transactions.customer_group_id', '=', 'CG.id')
-                        ->where('transactions.business_id', $business_id)
-                        ->where('transactions.type', 'sell')
-                        ->where('transactions.status', 'final')
-                        ->groupBy('transactions.customer_group_id')
-                        ->select(DB::raw('SUM(final_total) as total_sell'), 'CG.name');
+                ->where('transactions.business_id', $business_id)
+                ->where('transactions.type', 'sell')
+                ->where('transactions.status', 'final')
+                ->groupBy('transactions.customer_group_id')
+                ->select(DB::raw('SUM(final_total) as total_sell'), 'CG.name');
 
             $group_id = $request->get('customer_group_id', null);
             if (! empty($group_id)) {
@@ -1774,7 +1868,7 @@ $name = e($row->name); // Escape for safety
 
             return Datatables::of($query)
                 ->editColumn('total_sell', function ($row) {
-                    return '<span class="display_currency" data-currency_symbol = true>'.$row->total_sell.'</span>';
+                    return '<span class="display_currency" data-currency_symbol = true>' . $row->total_sell . '</span>';
                 })
                 ->rawColumns(['total_sell'])
                 ->make(true);
@@ -1806,37 +1900,37 @@ $name = e($row->name); // Escape for safety
                 'purchase_lines.transaction_id',
                 '=',
                 't.id'
-                    )
-                    ->join(
-                        'variations as v',
-                        'purchase_lines.variation_id',
-                        '=',
-                        'v.id'
-                    )
-                    ->join('product_variations as pv', 'v.product_variation_id', '=', 'pv.id')
-                    ->join('contacts as c', 't.contact_id', '=', 'c.id')
-                    ->join('products as p', 'pv.product_id', '=', 'p.id')
-                    ->leftjoin('units as u', 'p.unit_id', '=', 'u.id')
-                    ->where('t.business_id', $business_id)
-                    ->where('t.type', 'purchase')
-                    ->select(
-                        'p.name as product_name',
-                        'p.type as product_type',
-                        'pv.name as product_variation',
-                        'v.name as variation_name',
-                        'v.sub_sku',
-                        'c.name as supplier',
-                        'c.supplier_business_name',
-                        't.id as transaction_id',
-                        't.ref_no',
-                        't.transaction_date as transaction_date',
-                        'purchase_lines.purchase_price_inc_tax as unit_purchase_price',
-                        DB::raw('(purchase_lines.quantity - purchase_lines.quantity_returned) as purchase_qty'),
-                        'purchase_lines.quantity_adjusted',
-                        'u.short_name as unit',
-                        DB::raw('((purchase_lines.quantity - purchase_lines.quantity_returned - purchase_lines.quantity_adjusted) * purchase_lines.purchase_price_inc_tax) as subtotal')
-                    )
-                    ->groupBy('purchase_lines.id');
+            )
+                ->join(
+                    'variations as v',
+                    'purchase_lines.variation_id',
+                    '=',
+                    'v.id'
+                )
+                ->join('product_variations as pv', 'v.product_variation_id', '=', 'pv.id')
+                ->join('contacts as c', 't.contact_id', '=', 'c.id')
+                ->join('products as p', 'pv.product_id', '=', 'p.id')
+                ->leftjoin('units as u', 'p.unit_id', '=', 'u.id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'purchase')
+                ->select(
+                    'p.name as product_name',
+                    'p.type as product_type',
+                    'pv.name as product_variation',
+                    'v.name as variation_name',
+                    'v.sub_sku',
+                    'c.name as supplier',
+                    'c.supplier_business_name',
+                    't.id as transaction_id',
+                    't.ref_no',
+                    't.transaction_date as transaction_date',
+                    'purchase_lines.purchase_price_inc_tax as unit_purchase_price',
+                    DB::raw('(purchase_lines.quantity - purchase_lines.quantity_returned) as purchase_qty'),
+                    'purchase_lines.quantity_adjusted',
+                    'u.short_name as unit',
+                    DB::raw('((purchase_lines.quantity - purchase_lines.quantity_returned - purchase_lines.quantity_adjusted) * purchase_lines.purchase_price_inc_tax) as subtotal')
+                )
+                ->groupBy('purchase_lines.id');
             if (! empty($variation_id)) {
                 $query->where('purchase_lines.variation_id', $variation_id);
             }
@@ -1870,26 +1964,26 @@ $name = e($row->name); // Escape for safety
                 ->editColumn('product_name', function ($row) {
                     $product_name = $row->product_name;
                     if ($row->product_type == 'variable') {
-                        $product_name .= ' - '.$row->product_variation.' - '.$row->variation_name;
+                        $product_name .= ' - ' . $row->product_variation . ' - ' . $row->variation_name;
                     }
 
                     return $product_name;
                 })
-                 ->editColumn('ref_no', function ($row) {
-                     return '<a data-href="'.action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->ref_no.'</a>';
-                 })
-                 ->editColumn('purchase_qty', function ($row) {
-                     return '<span data-is_quantity="true" class="display_currency purchase_qty" data-currency_symbol=false data-orig-value="'.(float) $row->purchase_qty.'" data-unit="'.$row->unit.'" >'.(float) $row->purchase_qty.'</span> '.$row->unit;
-                 })
-                 ->editColumn('quantity_adjusted', function ($row) {
-                     return '<span data-is_quantity="true" class="display_currency quantity_adjusted" data-currency_symbol=false data-orig-value="'.(float) $row->quantity_adjusted.'" data-unit="'.$row->unit.'" >'.(float) $row->quantity_adjusted.'</span> '.$row->unit;
-                 })
-                 ->editColumn('subtotal', function ($row) {
-                     return '<span class="row_subtotal"  
-                     data-orig-value="'.$row->subtotal.'">'.
-                     $this->transactionUtil->num_f($row->subtotal, true).'</span>';
-                 })
+                ->editColumn('ref_no', function ($row) {
+                    return '<a data-href="' . action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
+                        . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->ref_no . '</a>';
+                })
+                ->editColumn('purchase_qty', function ($row) {
+                    return '<span data-is_quantity="true" class="display_currency purchase_qty" data-currency_symbol=false data-orig-value="' . (float) $row->purchase_qty . '" data-unit="' . $row->unit . '" >' . (float) $row->purchase_qty . '</span> ' . $row->unit;
+                })
+                ->editColumn('quantity_adjusted', function ($row) {
+                    return '<span data-is_quantity="true" class="display_currency quantity_adjusted" data-currency_symbol=false data-orig-value="' . (float) $row->quantity_adjusted . '" data-unit="' . $row->unit . '" >' . (float) $row->quantity_adjusted . '</span> ' . $row->unit;
+                })
+                ->editColumn('subtotal', function ($row) {
+                    return '<span class="row_subtotal"  
+                     data-orig-value="' . $row->subtotal . '">' .
+                        $this->transactionUtil->num_f($row->subtotal, true) . '</span>';
+                })
                 ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
                 ->editColumn('unit_purchase_price', function ($row) {
                     return $this->transactionUtil->num_f($row->unit_purchase_price, true);
@@ -1948,7 +2042,7 @@ $name = e($row->name); // Escape for safety
                 ->where('t.business_id', $business_id)
                 ->where(function ($q) {
                     $q->where('t.type', 'sell')
-                      ->orWhere('t.type', 'sell_return');
+                        ->orWhere('t.type', 'sell_return');
                 })
                 ->where('t.status', 'final')
                 ->with('transaction.payment_lines')
@@ -2008,7 +2102,7 @@ $name = e($row->name); // Escape for safety
             $customer_group_id = $request->get('customer_group_id', null);
             if (! empty($customer_group_id)) {
                 $query->leftjoin('customer_groups AS CG', 'c.customer_group_id', '=', 'CG.id')
-                ->where('CG.id', $customer_group_id);
+                    ->where('CG.id', $customer_group_id);
             }
 
             $category_id = $request->get('category_id', null);
@@ -2025,52 +2119,52 @@ $name = e($row->name); // Escape for safety
                 ->editColumn('product_name', function ($row) {
                     $product_name = $row->product_name;
                     if ($row->product_type == 'variable') {
-                        $product_name .= ' - '.$row->product_variation.' - '.$row->variation_name;
+                        $product_name .= ' - ' . $row->product_variation . ' - ' . $row->variation_name;
                     }
 
                     return $product_name;
                 })
-                 ->editColumn('invoice_no', function ($row) {
-                     return '<a data-href="'.action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->invoice_no.'</a>';
-                 })
+                ->editColumn('invoice_no', function ($row) {
+                    return '<a data-href="' . action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
+                        . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->invoice_no . '</a>';
+                })
                 ->editColumn('transaction_date', '{{@format_datetime($transaction_date)}}')
                 ->editColumn('unit_sale_price', function ($row) {
-                    return '<span class="unit_sale_price" data-orig-value="'.$row->unit_sale_price.'">'.
-                    $this->transactionUtil->num_f($row->unit_sale_price, true).'</span>';
+                    return '<span class="unit_sale_price" data-orig-value="' . $row->unit_sale_price . '">' .
+                        $this->transactionUtil->num_f($row->unit_sale_price, true) . '</span>';
                 })
                 ->editColumn('sell_qty', function ($row) {
                     //ignore child sell line of combo product
                     $class = is_null($row->parent_sell_line_id) ? 'sell_qty' : '';
 
-                    return '<span class="'.$class.'"  data-orig-value="'.$row->sell_qty.'" 
-                    data-unit="'.$row->unit.'" >'.
-                    $this->transactionUtil->num_f($row->sell_qty, false, null, true).'</span> '.$row->unit;
+                    return '<span class="' . $class . '"  data-orig-value="' . $row->sell_qty . '" 
+                    data-unit="' . $row->unit . '" >' .
+                        $this->transactionUtil->num_f($row->sell_qty, false, null, true) . '</span> ' . $row->unit;
                 })
-                 ->editColumn('subtotal', function ($row) {
-                     //ignore child sell line of combo product
-                     $class = is_null($row->parent_sell_line_id) ? 'row_subtotal' : '';
+                ->editColumn('subtotal', function ($row) {
+                    //ignore child sell line of combo product
+                    $class = is_null($row->parent_sell_line_id) ? 'row_subtotal' : '';
 
-                     return '<span class="'.$class.'"  data-orig-value="'.$row->subtotal.'">'.
-                    $this->transactionUtil->num_f($row->subtotal ?? 0, true).'</span>';
-                 })
-                 ->editColumn('returntotal', function ($row) {
-                     //ignore child sell line of combo product
-                     $class = is_null($row->parent_sell_line_id) ? 'row_returntotal' : '';
+                    return '<span class="' . $class . '"  data-orig-value="' . $row->subtotal . '">' .
+                        $this->transactionUtil->num_f($row->subtotal ?? 0, true) . '</span>';
+                })
+                ->editColumn('returntotal', function ($row) {
+                    //ignore child sell line of combo product
+                    $class = is_null($row->parent_sell_line_id) ? 'row_returntotal' : '';
 
-                     return '<span class="row_returntotal"  data-orig-value="'.$row->returntotal.'">'.
-                    $this->transactionUtil->num_f($row->returntotal ?? 0, true).'</span>';
-                 })
-                 ->editColumn('nettotal', function ($row) {
-                     //ignore child sell line of combo product
-                     $class = is_null($row->parent_sell_line_id) ? 'row_nettotal' : '';
+                    return '<span class="row_returntotal"  data-orig-value="' . $row->returntotal . '">' .
+                        $this->transactionUtil->num_f($row->returntotal ?? 0, true) . '</span>';
+                })
+                ->editColumn('nettotal', function ($row) {
+                    //ignore child sell line of combo product
+                    $class = is_null($row->parent_sell_line_id) ? 'row_nettotal' : '';
 
-                     return '<span class="row_nettotal"  data-orig-value="'.$row->nettotal.'">'.
-                    $this->transactionUtil->num_f($row->nettotal ?? 0, true).'</span>';
-                 })
+                    return '<span class="row_nettotal"  data-orig-value="' . $row->nettotal . '">' .
+                        $this->transactionUtil->num_f($row->nettotal ?? 0, true) . '</span>';
+                })
                 ->editColumn('unit_price', function ($row) {
-                    return '<span class="unit_price" data-orig-value="'.$row->unit_price.'">'.
-                    $this->transactionUtil->num_f($row->unit_price, true).'</span>';
+                    return '<span class="unit_price" data-orig-value="' . $row->unit_price . '">' .
+                        $this->transactionUtil->num_f($row->unit_price, true) . '</span>';
                 })
                 ->editColumn('discount_amount', '
                     @if($discount_type == "percentage")
@@ -2081,8 +2175,8 @@ $name = e($row->name); // Escape for safety
                     ')
                 ->editColumn('tax', function ($row) {
                     return $this->transactionUtil->num_f($row->item_tax, true)
-                     .'<br>'.'<span data-orig-value="'.$row->item_tax.'" 
-                     class="tax" data-unit="'.$row->tax.'"><small>('.$row->tax.')</small></span>';
+                        . '<br>' . '<span data-orig-value="' . $row->item_tax . '" 
+                     class="tax" data-unit="' . $row->tax . '"><small>(' . $row->tax . ')</small></span>';
                 })
                 ->addColumn('payment_methods', function ($row) use ($payment_types) {
                     $methods = array_unique($row->transaction->payment_lines->pluck('method')->toArray());
@@ -2094,12 +2188,12 @@ $name = e($row->name); // Escape for safety
                         $payment_method = __('lang_v1.checkout_multi_pay');
                     }
 
-                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="'.$payment_method.'" data-status-name="'.$payment_method.'">'.$payment_method.'</span>' : '';
+                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
 
                     return $html;
                 })
                 ->editColumn('customer', '@if(!empty($supplier_business_name)) {{$supplier_business_name}},<br>@endif {{$customer}}')
-                ->rawColumns(['invoice_no', 'unit_sale_price', 'subtotal','returntotal','nettotal', 'sell_qty', 'discount_amount', 'unit_price', 'tax', 'customer', 'payment_methods'])
+                ->rawColumns(['invoice_no', 'unit_sale_price', 'subtotal', 'returntotal', 'nettotal', 'sell_qty', 'discount_amount', 'unit_price', 'tax', 'customer', 'payment_methods'])
                 ->make(true);
         }
 
@@ -2110,8 +2204,15 @@ $name = e($row->name); // Escape for safety
         $customer_group = CustomerGroup::forDropdown($business_id, false, true);
 
         return view('report.product_sell_report')
-            ->with(compact('business_locations', 'customers', 'categories', 'brands',
-                'customer_group', 'product_custom_field1', 'product_custom_field2'));
+            ->with(compact(
+                'business_locations',
+                'customers',
+                'categories',
+                'brands',
+                'customer_group',
+                'product_custom_field1',
+                'product_custom_field2'
+            ));
     }
 
     /**
@@ -2212,7 +2313,7 @@ $name = e($row->name); // Escape for safety
             $customer_group_id = $request->get('customer_group_id', null);
             if (! empty($customer_group_id)) {
                 $query->leftjoin('customer_groups AS CG', 'c.customer_group_id', '=', 'CG.id')
-                ->where('CG.id', $customer_group_id);
+                    ->where('CG.id', $customer_group_id);
             }
 
             $category_id = $request->get('category_id', null);
@@ -2229,21 +2330,21 @@ $name = e($row->name); // Escape for safety
                 ->editColumn('product_name', function ($row) {
                     $product_name = $row->product_name;
                     if ($row->product_type == 'variable') {
-                        $product_name .= ' - '.$row->product_variation.' - '.$row->variation_name;
+                        $product_name .= ' - ' . $row->product_variation . ' - ' . $row->variation_name;
                     }
 
                     return $product_name;
                 })
-                 ->editColumn('invoice_no', function ($row) {
-                     return '<a data-href="'.action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->invoice_no.'</a>';
-                 })
+                ->editColumn('invoice_no', function ($row) {
+                    return '<a data-href="' . action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
+                        . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->invoice_no . '</a>';
+                })
                 ->editColumn('transaction_date', '{{@format_datetime($transaction_date)}}')
                 ->editColumn('unit_sale_price', function ($row) {
-                    return '<span class="display_currency" data-currency_symbol = true>'.$row->unit_sale_price.'</span>';
+                    return '<span class="display_currency" data-currency_symbol = true>' . $row->unit_sale_price . '</span>';
                 })
                 ->editColumn('purchase_quantity', function ($row) {
-                    return '<span data-is_quantity="true" class="display_currency purchase_quantity" data-currency_symbol=false data-orig-value="'.(float) $row->purchase_quantity.'" data-unit="'.$row->unit.'" >'.(float) $row->purchase_quantity.'</span> '.$row->unit;
+                    return '<span data-is_quantity="true" class="display_currency purchase_quantity" data-currency_symbol=false data-orig-value="' . (float) $row->purchase_quantity . '" data-unit="' . $row->unit . '" >' . (float) $row->purchase_quantity . '</span> ' . $row->unit;
                 })
                 ->editColumn('ref_no', '
                     @if($purchase_type == "opening_stock")
@@ -2274,16 +2375,16 @@ $name = e($row->name); // Escape for safety
         //Return the details in ajax call
         if ($request->ajax()) {
             $query = Product::where('products.business_id', $business_id)
-                    ->leftjoin('units', 'products.unit_id', '=', 'units.id')
-                    ->join('variations as v', 'products.id', '=', 'v.product_id')
-                    ->join('purchase_lines as pl', 'v.id', '=', 'pl.variation_id')
-                    ->leftjoin(
-                        'transaction_sell_lines_purchase_lines as tspl',
-                        'pl.id',
-                        '=',
-                        'tspl.purchase_line_id'
-                    )
-                    ->join('transactions as t', 'pl.transaction_id', '=', 't.id');
+                ->leftjoin('units', 'products.unit_id', '=', 'units.id')
+                ->join('variations as v', 'products.id', '=', 'v.product_id')
+                ->join('purchase_lines as pl', 'v.id', '=', 'pl.variation_id')
+                ->leftjoin(
+                    'transaction_sell_lines_purchase_lines as tspl',
+                    'pl.id',
+                    '=',
+                    'tspl.purchase_line_id'
+                )
+                ->join('transactions as t', 'pl.transaction_id', '=', 't.id');
 
             $permitted_locations = auth()->user()->permitted_locations();
             $location_filter = 'WHERE ';
@@ -2346,35 +2447,35 @@ $name = e($row->name); // Escape for safety
                 'products.type',
                 'units.short_name as unit'
             )
-            ->whereNotNull('pl.lot_number')
-            ->groupBy('v.id')
-            ->groupBy('pl.lot_number');
+                ->whereNotNull('pl.lot_number')
+                ->groupBy('v.id')
+                ->groupBy('pl.lot_number');
 
             return Datatables::of($products)
                 ->editColumn('stock', function ($row) {
                     $stock = $row->stock ? $row->stock : 0;
 
-                    return '<span data-is_quantity="true" class="display_currency total_stock" data-currency_symbol=false data-orig-value="'.(float) $stock.'" data-unit="'.$row->unit.'" >'.(float) $stock.'</span> '.$row->unit;
+                    return '<span data-is_quantity="true" class="display_currency total_stock" data-currency_symbol=false data-orig-value="' . (float) $stock . '" data-unit="' . $row->unit . '" >' . (float) $stock . '</span> ' . $row->unit;
                 })
                 ->editColumn('product', function ($row) {
                     if ($row->variation_name != 'DUMMY') {
-                        return $row->product.' ('.$row->variation_name.')';
+                        return $row->product . ' (' . $row->variation_name . ')';
                     } else {
                         return $row->product;
                     }
                 })
                 ->editColumn('total_sold', function ($row) {
                     if ($row->total_sold) {
-                        return '<span data-is_quantity="true" class="display_currency total_sold" data-currency_symbol=false data-orig-value="'.(float) $row->total_sold.'" data-unit="'.$row->unit.'" >'.(float) $row->total_sold.'</span> '.$row->unit;
+                        return '<span data-is_quantity="true" class="display_currency total_sold" data-currency_symbol=false data-orig-value="' . (float) $row->total_sold . '" data-unit="' . $row->unit . '" >' . (float) $row->total_sold . '</span> ' . $row->unit;
                     } else {
-                        return '0'.' '.$row->unit;
+                        return '0' . ' ' . $row->unit;
                     }
                 })
                 ->editColumn('total_adjusted', function ($row) {
                     if ($row->total_adjusted) {
-                        return '<span data-is_quantity="true" class="display_currency total_adjusted" data-currency_symbol=false data-orig-value="'.(float) $row->total_adjusted.'" data-unit="'.$row->unit.'" >'.(float) $row->total_adjusted.'</span> '.$row->unit;
+                        return '<span data-is_quantity="true" class="display_currency total_adjusted" data-currency_symbol=false data-orig-value="' . (float) $row->total_adjusted . '" data-unit="' . $row->unit . '" >' . (float) $row->total_adjusted . '</span> ' . $row->unit;
                     } else {
-                        return '0'.' '.$row->unit;
+                        return '0' . ' ' . $row->unit;
                     }
                 })
                 ->editColumn('exp_date', function ($row) {
@@ -2382,9 +2483,9 @@ $name = e($row->name); // Escape for safety
                         $carbon_exp = \Carbon::createFromFormat('Y-m-d', $row->exp_date);
                         $carbon_now = \Carbon::now();
                         if ($carbon_now->diffInDays($carbon_exp, false) >= 0) {
-                            return $this->productUtil->format_date($row->exp_date).'<br><small>( <span class="time-to-now">'.$row->exp_date.'</span> )</small>';
+                            return $this->productUtil->format_date($row->exp_date) . '<br><small>( <span class="time-to-now">' . $row->exp_date . '</span> )</small>';
                         } else {
-                            return $this->productUtil->format_date($row->exp_date).' &nbsp; <span class="label label-danger no-print">'.__('report.expired').'</span><span class="print_section">'.__('report.expired').'</span><br><small>( <span class="time-from-now">'.$row->exp_date.'</span> )</small>';
+                            return $this->productUtil->format_date($row->exp_date) . ' &nbsp; <span class="label label-danger no-print">' . __('report.expired') . '</span><span class="print_section">' . __('report.expired') . '</span><br><small>( <span class="time-from-now">' . $row->exp_date . '</span> )</small>';
                         }
                     } else {
                         return '--';
@@ -2400,7 +2501,7 @@ $name = e($row->name); // Escape for safety
         $categories = Category::forDropdown($business_id, 'product');
         $brands = Brands::forDropdown($business_id);
         $units = Unit::where('business_id', $business_id)
-                            ->pluck('short_name', 'id');
+            ->pluck('short_name', 'id');
         $business_locations = BusinessLocation::forDropdown($business_id, true);
 
         return view('report.lot_report')
@@ -2486,36 +2587,36 @@ $name = e($row->name); // Escape for safety
             $payment_types = $this->transactionUtil->payment_types(null, true, $business_id);
 
             return Datatables::of($query)
-                 ->editColumn('ref_no', function ($row) {
-                     if (! empty($row->ref_no)) {
-                         return '<a data-href="'.action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->ref_no.'</a>';
-                     } else {
-                         return '';
-                     }
-                 })
+                ->editColumn('ref_no', function ($row) {
+                    if (! empty($row->ref_no)) {
+                        return '<a data-href="' . action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
+                            . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->ref_no . '</a>';
+                    } else {
+                        return '';
+                    }
+                })
                 ->editColumn('paid_on', '{{@format_datetime($paid_on)}}')
                 ->editColumn('method', function ($row) use ($payment_types) {
                     $method = ! empty($payment_types[$row->method]) ? $payment_types[$row->method] : '';
                     if ($row->method == 'cheque') {
-                        $method .= '<br>('.__('lang_v1.cheque_no').': '.$row->cheque_number.')';
+                        $method .= '<br>(' . __('lang_v1.cheque_no') . ': ' . $row->cheque_number . ')';
                     } elseif ($row->method == 'card') {
-                        $method .= '<br>('.__('lang_v1.card_transaction_no').': '.$row->card_transaction_number.')';
+                        $method .= '<br>(' . __('lang_v1.card_transaction_no') . ': ' . $row->card_transaction_number . ')';
                     } elseif ($row->method == 'bank_transfer') {
-                        $method .= '<br>('.__('lang_v1.bank_account_no').': '.$row->bank_account_number.')';
+                        $method .= '<br>(' . __('lang_v1.bank_account_no') . ': ' . $row->bank_account_number . ')';
                     } elseif ($row->method == 'custom_pay_1') {
-                        $method .= '<br>('.__('lang_v1.transaction_no').': '.$row->transaction_no.')';
+                        $method .= '<br>(' . __('lang_v1.transaction_no') . ': ' . $row->transaction_no . ')';
                     } elseif ($row->method == 'custom_pay_2') {
-                        $method .= '<br>('.__('lang_v1.transaction_no').': '.$row->transaction_no.')';
+                        $method .= '<br>(' . __('lang_v1.transaction_no') . ': ' . $row->transaction_no . ')';
                     } elseif ($row->method == 'custom_pay_3') {
-                        $method .= '<br>('.__('lang_v1.transaction_no').': '.$row->transaction_no.')';
+                        $method .= '<br>(' . __('lang_v1.transaction_no') . ': ' . $row->transaction_no . ')';
                     }
 
                     return $method;
                 })
                 ->editColumn('amount', function ($row) {
-                    return '<span class="paid-amount" data-orig-value="'.$row->amount.'">'.
-                    $this->transactionUtil->num_f($row->amount, true).'</span>';
+                    return '<span class="paid-amount" data-orig-value="' . $row->amount . '">' .
+                        $this->transactionUtil->num_f($row->amount, true) . '</span>';
                 })
                 ->addColumn('action', '<button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary view_payment" data-href="{{ action([\App\Http\Controllers\TransactionPaymentController::class, \'viewPayment\'], [$DT_RowId]) }}">@lang("messages.view")
                     </button> @if(!empty($document))<a href="{{asset("/uploads/documents/" . $document)}}" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-accent" download=""><i class="fa fa-download"></i> @lang("purchase.download_document")</a>@endif')
@@ -2558,10 +2659,10 @@ $name = e($row->name); // Escape for safety
             })
                 ->leftjoin('contacts as c', 't.contact_id', '=', 'c.id')
                 ->leftjoin('customer_groups AS CG', 'c.customer_group_id', '=', 'CG.id')
-                ->join('transaction_sell_lines AS s', 's.transaction_id','=','t.id')
-                ->join('products AS p', 'p.id','=','s.product_id')
-                ->leftjoin('categories AS cat', 'cat.id','=','p.category_id')
-                ->leftjoin('business_locations AS b', 'b.id','=','t.location_id')
+                ->join('transaction_sell_lines AS s', 's.transaction_id', '=', 't.id')
+                ->join('products AS p', 'p.id', '=', 's.product_id')
+                ->leftjoin('categories AS cat', 'cat.id', '=', 'p.category_id')
+                ->leftjoin('business_locations AS b', 'b.id', '=', 't.location_id')
                 ->where('transaction_payments.business_id', $business_id)
                 ->where(function ($q) use ($business_id, $contact_filter1, $contact_filter2, $parent_payment_query_part) {
                     $q->whereRaw("(transaction_payments.transaction_id IS NOT NULL AND t.type IN ('sell', 'opening_balance') $parent_payment_query_part $contact_filter1)")
@@ -2631,32 +2732,32 @@ $name = e($row->name); // Escape for safety
             }
 
             return Datatables::of($query)
-                 ->editColumn('invoice_no', function ($row) {
-                     if (! empty($row->transaction_id)) {
-                         return '<a data-href="'.action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->invoice_no.'</a>';
-                     } else {
-                         return '';
-                     }
-                 })
+                ->editColumn('invoice_no', function ($row) {
+                    if (! empty($row->transaction_id)) {
+                        return '<a data-href="' . action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
+                            . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->invoice_no . '</a>';
+                    } else {
+                        return '';
+                    }
+                })
                 ->editColumn('paid_on', '{{@format_datetime($paid_on)}}')
                 ->editColumn('method', function ($row) use ($payment_types) {
                     $method = ! empty($payment_types[$row->method]) ? $payment_types[$row->method] : '';
                     if ($row->method == 'cheque') {
-                        $method .= '<br>('.__('lang_v1.cheque_no').': '.$row->cheque_number.')';
+                        $method .= '<br>(' . __('lang_v1.cheque_no') . ': ' . $row->cheque_number . ')';
                     } elseif ($row->method == 'card') {
-                        $method .= '<br>('.__('lang_v1.card_transaction_no').': '.$row->card_transaction_number.')';
+                        $method .= '<br>(' . __('lang_v1.card_transaction_no') . ': ' . $row->card_transaction_number . ')';
                     } elseif ($row->method == 'bank_transfer') {
-                        $method .= '<br>('.__('lang_v1.bank_account_no').': '.$row->bank_account_number.')';
+                        $method .= '<br>(' . __('lang_v1.bank_account_no') . ': ' . $row->bank_account_number . ')';
                     } elseif ($row->method == 'custom_pay_1') {
-                        $method .= '<br>('.__('lang_v1.transaction_no').': '.$row->transaction_no.')';
+                        $method .= '<br>(' . __('lang_v1.transaction_no') . ': ' . $row->transaction_no . ')';
                     } elseif ($row->method == 'custom_pay_2') {
-                        $method .= '<br>('.__('lang_v1.transaction_no').': '.$row->transaction_no.')';
+                        $method .= '<br>(' . __('lang_v1.transaction_no') . ': ' . $row->transaction_no . ')';
                     } elseif ($row->method == 'custom_pay_3') {
-                        $method .= '<br>('.__('lang_v1.transaction_no').': '.$row->transaction_no.')';
+                        $method .= '<br>(' . __('lang_v1.transaction_no') . ': ' . $row->transaction_no . ')';
                     }
                     if ($row->is_return == 1) {
-                        $method .= '<br><small>('.__('lang_v1.change_return').')</small>';
+                        $method .= '<br><small>(' . __('lang_v1.change_return') . ')</small>';
                     }
 
                     return $method;
@@ -2664,8 +2765,8 @@ $name = e($row->name); // Escape for safety
                 ->editColumn('amount', function ($row) {
                     $amount = $row->is_return == 1 ? -1 * $row->amount : $row->amount;
 
-                    return '<span class="paid-amount" data-orig-value="'.$amount.'" 
-                    >'.$this->transactionUtil->num_f($amount, true).'</span>';
+                    return '<span class="paid-amount" data-orig-value="' . $amount . '" 
+                    >' . $this->transactionUtil->num_f($amount, true) . '</span>';
                 })
                 ->addColumn('action', '<button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-primary view_payment" data-href="{{ action([\App\Http\Controllers\TransactionPaymentController::class, \'viewPayment\'], [$DT_RowId]) }}">@lang("messages.view")
                     </button> @if(!empty($document))<a href="{{asset("/uploads/documents/" . $document)}}" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-accent" download=""><i class="fa fa-download"></i> @lang("purchase.download_document")</a>@endif')
@@ -2692,13 +2793,13 @@ $name = e($row->name); // Escape for safety
         }
         $business_id = $request->session()->get('user.business_id');
         if ($request->ajax()) {
-            
+
             $commission_agent = User::where('is_cmmsn_agnt', 1)
-            ->where('business_id',$business_id)
-            ->get();
+                ->where('business_id', $business_id)
+                ->get();
 
             $transactions = Transaction::where('type', 'sell')
-            ->whereNotNull('commission_agent');
+                ->whereNotNull('commission_agent');
 
             if ($request->filled('start_date') && $request->filled('end_date')) {
                 $transactions->whereBetween(DB::raw('date(created_at)'), [
@@ -2712,21 +2813,21 @@ $name = e($row->name); // Escape for safety
 
             $transactions = $transactions->get();
 
-            $data=[];
-            foreach($commission_agent as $item){
-                $total_sale = $transactions->where('commission_agent',$item->id)->sum('final_total');
-                $individual_comission = $total_sale  * ($item->cmmsn_percent/100);
-                $global_commission=0;
-                if($total_sale>800000){
-                    $global_commission = $total_sale  * ($item->global_commission/100);
+            $data = [];
+            foreach ($commission_agent as $item) {
+                $total_sale = $transactions->where('commission_agent', $item->id)->sum('final_total');
+                $individual_comission = $total_sale  * ($item->cmmsn_percent / 100);
+                $global_commission = 0;
+                if ($total_sale > 800000) {
+                    $global_commission = $total_sale  * ($item->global_commission / 100);
                 }
-                $data[]=[
-                    "agent_name"=> $item->surname.' '.$item->first_name.' '.$item->last_name,
-                    "agent_email"=>$item->email??'N/A',
-                    "agent_contact_no"=>$item->contact_no??'N/A',
-                    "total_sale"=>$total_sale??0,
-                    "individual_commission"=>round($individual_comission,2),
-                    "global_commission"=>round($global_commission,2)
+                $data[] = [
+                    "agent_name" => $item->surname . ' ' . $item->first_name . ' ' . $item->last_name,
+                    "agent_email" => $item->email ?? 'N/A',
+                    "agent_contact_no" => $item->contact_no ?? 'N/A',
+                    "total_sale" => $total_sale ?? 0,
+                    "individual_commission" => round($individual_comission, 2),
+                    "global_commission" => round($global_commission, 2)
                 ];
             }
 
@@ -2753,11 +2854,11 @@ $name = e($row->name); // Escape for safety
 
         if ($request->ajax()) {
             $query = ResTable::leftjoin('transactions AS T', 'T.res_table_id', '=', 'res_tables.id')
-                        ->where('T.business_id', $business_id)
-                        ->where('T.type', 'sell')
-                        ->where('T.status', 'final')
-                        ->groupBy('res_tables.id')
-                        ->select(DB::raw('SUM(final_total) as total_sell'), 'res_tables.name as table');
+                ->where('T.business_id', $business_id)
+                ->where('T.type', 'sell')
+                ->where('T.status', 'final')
+                ->groupBy('res_tables.id')
+                ->select(DB::raw('SUM(final_total) as total_sell'), 'res_tables.name as table');
 
             $location_id = $request->get('location_id', null);
             if (! empty($location_id)) {
@@ -2773,7 +2874,7 @@ $name = e($row->name); // Escape for safety
 
             return Datatables::of($query)
                 ->editColumn('total_sell', function ($row) {
-                    return '<span class="display_currency" data-currency_symbol="true">'.$row->total_sell.'</span>';
+                    return '<span class="display_currency" data-currency_symbol="true">' . $row->total_sell . '</span>';
                 })
                 ->rawColumns(['total_sell'])
                 ->make(true);
@@ -2892,7 +2993,7 @@ $name = e($row->name); // Escape for safety
             if (! empty($customer_group_id)) {
                 $query->leftjoin('contacts AS c', 't.contact_id', '=', 'c.id')
                     ->leftjoin('customer_groups AS CG', 'c.customer_group_id', '=', 'CG.id')
-                ->where('CG.id', $customer_group_id);
+                    ->where('CG.id', $customer_group_id);
             }
 
             $category_id = $request->get('category_id', null);
@@ -2909,28 +3010,28 @@ $name = e($row->name); // Escape for safety
                 ->editColumn('product_name', function ($row) {
                     $product_name = $row->product_name;
                     if ($row->product_type == 'variable') {
-                        $product_name .= ' - '.$row->product_variation.' - '.$row->variation_name;
+                        $product_name .= ' - ' . $row->product_variation . ' - ' . $row->variation_name;
                     }
 
                     return $product_name;
                 })
                 ->editColumn('transaction_date', '{{@format_date($formated_date)}}')
                 ->editColumn('total_qty_sold', function ($row) {
-                    return '<span data-is_quantity="true" class="display_currency sell_qty" data-currency_symbol=false data-orig-value="'.(float) $row->total_qty_sold.'" data-unit="'.$row->unit.'" >'.(float) $row->total_qty_sold.'</span> '.$row->unit;
+                    return '<span data-is_quantity="true" class="display_currency sell_qty" data-currency_symbol=false data-orig-value="' . (float) $row->total_qty_sold . '" data-unit="' . $row->unit . '" >' . (float) $row->total_qty_sold . '</span> ' . $row->unit;
                 })
                 ->editColumn('current_stock', function ($row) {
                     if ($row->enable_stock) {
-                        return '<span data-is_quantity="true" class="display_currency current_stock" data-currency_symbol=false data-orig-value="'.(float) $row->current_stock.'" data-unit="'.$row->unit.'" >'.(float) $row->current_stock.'</span> '.$row->unit;
+                        return '<span data-is_quantity="true" class="display_currency current_stock" data-currency_symbol=false data-orig-value="' . (float) $row->current_stock . '" data-unit="' . $row->unit . '" >' . (float) $row->current_stock . '</span> ' . $row->unit;
                     } else {
                         return '';
                     }
                 })
-                 ->editColumn('subtotal', function ($row) {
-                     $class = is_null($row->parent_sell_line_id) ? 'row_subtotal' : '';
+                ->editColumn('subtotal', function ($row) {
+                    $class = is_null($row->parent_sell_line_id) ? 'row_subtotal' : '';
 
-                     return '<span class="'.$class.'" data-orig-value="'.$row->subtotal.'">'.
-                     $this->transactionUtil->num_f($row->subtotal, true).'</span>';
-                 })
+                    return '<span class="' . $class . '" data-orig-value="' . $row->subtotal . '">' .
+                        $this->transactionUtil->num_f($row->subtotal, true) . '</span>';
+                })
 
                 ->rawColumns(['current_stock', 'subtotal', 'total_qty_sold'])
                 ->make(true);
@@ -3015,7 +3116,7 @@ $name = e($row->name); // Escape for safety
             if (! empty($customer_group_id)) {
                 $query->leftjoin('contacts AS c', 't.contact_id', '=', 'c.id')
                     ->leftjoin('customer_groups AS CG', 'c.customer_group_id', '=', 'CG.id')
-                ->where('CG.id', $customer_group_id);
+                    ->where('CG.id', $customer_group_id);
             }
 
             $category_id = $request->get('category_id', null);
@@ -3032,17 +3133,17 @@ $name = e($row->name); // Escape for safety
                 ->editColumn('category_name', '{{$category_name ?? __("lang_v1.uncategorized")}}')
                 ->editColumn('brand_name', '{{$brand_name ?? __("lang_v1.no_brand")}}')
                 ->editColumn('total_qty_sold', function ($row) {
-                    return '<span data-is_quantity="true" class="display_currency sell_qty" data-currency_symbol=false data-orig-value="'.(float) $row->total_qty_sold.'" data-unit="" >'.(float) $row->total_qty_sold.'</span> '.$row->unit;
+                    return '<span data-is_quantity="true" class="display_currency sell_qty" data-currency_symbol=false data-orig-value="' . (float) $row->total_qty_sold . '" data-unit="" >' . (float) $row->total_qty_sold . '</span> ' . $row->unit;
                 })
                 ->editColumn('current_stock', function ($row) {
-                    return '<span data-is_quantity="true" class="display_currency current_stock" data-currency_symbol=false data-orig-value="'.(float) $row->current_stock.'" data-unit="">'.(float) $row->current_stock.'</span> ';
+                    return '<span data-is_quantity="true" class="display_currency current_stock" data-currency_symbol=false data-orig-value="' . (float) $row->current_stock . '" data-unit="">' . (float) $row->current_stock . '</span> ';
                 })
-                 ->editColumn('subtotal', function ($row) {
-                     $class = is_null($row->parent_sell_line_id) ? 'row_subtotal' : '';
+                ->editColumn('subtotal', function ($row) {
+                    $class = is_null($row->parent_sell_line_id) ? 'row_subtotal' : '';
 
-                     return '<span class="'.$class.'" data-orig-value="'.$row->subtotal.'">'
-                    .$this->transactionUtil->num_f($row->subtotal, true).'</span>';
-                 })
+                    return '<span class="' . $class . '" data-orig-value="' . $row->subtotal . '">'
+                        . $this->transactionUtil->num_f($row->subtotal, true) . '</span>';
+                })
 
                 ->rawColumns(['current_stock', 'subtotal', 'total_qty_sold', 'category_name'])
                 ->make(true);
@@ -3070,8 +3171,8 @@ $name = e($row->name); // Escape for safety
 
         if (! empty(request()->input('location_id'))) {
             $location = BusinessLocation::where('business_id', $business_id)
-                                        ->where('id', $location_id)
-                                        ->first();
+                ->where('id', $location_id)
+                ->first();
             $stock_details = $this->productUtil->getVariationStockMisMatch($business_id, $variation_id, $location_id);
         }
 
@@ -3092,9 +3193,11 @@ $name = e($row->name); // Escape for safety
             abort(403, 'Unauthorized action.');
         }
 
-        if (! empty(request()->input('variation_id'))
+        if (
+            ! empty(request()->input('variation_id'))
             && ! empty(request()->input('location_id'))
-            && request()->has('stock')) {
+            && request()->has('stock')
+        ) {
             $business_id = request()->session()->get('user.business_id');
 
             $this->productUtil->fixVariationStockMisMatch($business_id, request()->input('variation_id'), request()->input('location_id'), request()->input('stock'));
@@ -3116,21 +3219,21 @@ $name = e($row->name); // Escape for safety
         $business_id = request()->session()->get('user.business_id');
 
         $query = TransactionSellLine::leftJoin('transactions as t', 't.id', '=', 'transaction_sell_lines.transaction_id')
-                ->leftJoin('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
-                ->leftJoin('products as p', 'v.product_id', '=', 'p.id')
-                ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
-                ->leftJoin('product_variations as pv', 'v.product_variation_id', '=', 'pv.id')
-                ->leftJoin('users as ss', 'ss.id', '=', 'transaction_sell_lines.res_service_staff_id')
-                ->leftjoin(
-                    'business_locations AS bl',
-                    't.location_id',
-                    '=',
-                    'bl.id'
-                )
-                ->where('t.business_id', $business_id)
-                ->where('t.type', 'sell')
-                ->where('t.status', 'final')
-                ->whereNotNull('transaction_sell_lines.res_service_staff_id');
+            ->leftJoin('variations as v', 'transaction_sell_lines.variation_id', '=', 'v.id')
+            ->leftJoin('products as p', 'v.product_id', '=', 'p.id')
+            ->leftJoin('units as u', 'p.unit_id', '=', 'u.id')
+            ->leftJoin('product_variations as pv', 'v.product_variation_id', '=', 'pv.id')
+            ->leftJoin('users as ss', 'ss.id', '=', 'transaction_sell_lines.res_service_staff_id')
+            ->leftjoin(
+                'business_locations AS bl',
+                't.location_id',
+                '=',
+                'bl.id'
+            )
+            ->where('t.business_id', $business_id)
+            ->where('t.type', 'sell')
+            ->where('t.status', 'final')
+            ->whereNotNull('transaction_sell_lines.res_service_staff_id');
 
         if (! empty(request()->service_staff_id)) {
             $query->where('transaction_sell_lines.res_service_staff_id', request()->service_staff_id);
@@ -3147,7 +3250,7 @@ $name = e($row->name); // Escape for safety
             $start = request()->start_date;
             $end = request()->end_date;
             $query->whereDate('t.transaction_date', '>=', $start)
-                        ->whereDate('t.transaction_date', '<=', $end);
+                ->whereDate('t.transaction_date', '<=', $end);
         }
 
         $query->select(
@@ -3173,7 +3276,7 @@ $name = e($row->name); // Escape for safety
             ->editColumn('product_name', function ($row) {
                 $name = $row->product_name;
                 if ($row->product_type == 'variable') {
-                    $name .= ' - '.$row->product_variation_name.' - '.$row->variation_name;
+                    $name .= ' - ' . $row->product_variation_name . ' - ' . $row->variation_name;
                 }
 
                 return $name;
@@ -3207,13 +3310,13 @@ $name = e($row->name); // Escape for safety
                         $discount = $row->unit_price_before_discount * ($discount / 100);
                     }
 
-                    return '<span class="display_currency total-discount" data-currency_symbol="true" data-orig-value="'.$discount.'">'.$discount.'</span>';
+                    return '<span class="display_currency total-discount" data-currency_symbol="true" data-orig-value="' . $discount . '">' . $discount . '</span>';
                 }
             )
             ->editColumn('transaction_date', '{{@format_date($transaction_date)}}')
 
             ->rawColumns(['line_discount_amount', 'unit_price_before_discount', 'item_tax', 'unit_price_inc_tax', 'item_tax', 'quantity', 'total'])
-                  ->make(true);
+            ->make(true);
 
         return $datatable;
     }
@@ -3241,7 +3344,8 @@ $name = e($row->name); // Escape for safety
             ->where('sale.business_id', $business_id)
             ->where('transaction_sell_lines.children_type', '!=', 'combo');
         //If type combo: find childrens, sale price parent - get PP of childrens
-        $query->select(DB::raw('SUM(IF (TSPL.id IS NULL AND P.type="combo", ( 
+        $query->select(
+            DB::raw('SUM(IF (TSPL.id IS NULL AND P.type="combo", ( 
             SELECT Sum((tspl2.quantity - tspl2.qty_returned) * (tsl.unit_price_inc_tax - pl2.purchase_price_inc_tax)) AS total
                 FROM transaction_sell_lines AS tsl
                     JOIN transaction_sell_lines_purchase_lines AS tspl2
@@ -3250,7 +3354,7 @@ $name = e($row->name); // Escape for safety
                 ON tspl2.purchase_line_id = pl2.id 
                 WHERE tsl.parent_sell_line_id = transaction_sell_lines.id), IF(P.enable_stock=0,(transaction_sell_lines.quantity - transaction_sell_lines.quantity_returned) * transaction_sell_lines.unit_price_inc_tax,   
                 (TSPL.quantity - TSPL.qty_returned) * (transaction_sell_lines.unit_price_inc_tax - PL.purchase_price_inc_tax)) )) AS gross_profit')
-            );
+        );
 
         $permitted_locations = auth()->user()->permitted_locations();
         if ($permitted_locations != 'all') {
@@ -3265,7 +3369,7 @@ $name = e($row->name); // Escape for safety
             $start = request()->start_date;
             $end = request()->end_date;
             $query->whereDate('sale.transaction_date', '>=', $start)
-                        ->whereDate('sale.transaction_date', '<=', $end);
+                ->whereDate('sale.transaction_date', '<=', $end);
         }
 
         if ($by == 'product') {
@@ -3327,7 +3431,7 @@ $name = e($row->name); // Escape for safety
 
         if ($by == 'customer') {
             $query->join('contacts as CU', 'sale.contact_id', '=', 'CU.id')
-            ->addSelect('CU.name as customer', 'CU.supplier_business_name')
+                ->addSelect('CU.name as customer', 'CU.supplier_business_name')
                 ->groupBy('sale.contact_id');
         }
 
@@ -3341,7 +3445,7 @@ $name = e($row->name); // Escape for safety
                 }
 
                 $profit = $row->gross_profit - $discount;
-                $html = '<span class="gross-profit" data-orig-value="'.$profit.'" >'.$this->transactionUtil->num_f($profit, true).'</span>';
+                $html = '<span class="gross-profit" data-orig-value="' . $profit . '" >' . $this->transactionUtil->num_f($profit, true) . '</span>';
 
                 return $html;
             });
@@ -3349,8 +3453,9 @@ $name = e($row->name); // Escape for safety
             $datatable->editColumn(
                 'gross_profit',
                 function ($row) {
-                    return '<span class="gross-profit" data-orig-value="'.$row->gross_profit.'">'.$this->transactionUtil->num_f($row->gross_profit, true).'</span>';
-                });
+                    return '<span class="gross-profit" data-orig-value="' . $row->gross_profit . '">' . $this->transactionUtil->num_f($row->gross_profit, true) . '</span>';
+                }
+            );
         }
 
         if ($by == 'category') {
@@ -3372,10 +3477,11 @@ $name = e($row->name); // Escape for safety
 
         if ($by == 'product') {
             $datatable->filterColumn(
-                 'product',
-                 function ($query, $keyword) {
-                     $query->whereRaw("IF(P.type='variable', CONCAT(P.name, ' - ', PV.name, ' - ', V.name, ' (', V.sub_sku, ')'), CONCAT(P.name, ' (', P.sku, ')')) LIKE '%{$keyword}%'");
-                 });
+                'product',
+                function ($query, $keyword) {
+                    $query->whereRaw("IF(P.type='variable', CONCAT(P.name, ' - ', PV.name, ' - ', V.name, ' (', V.sub_sku, ')'), CONCAT(P.name, ' (', P.sku, ')')) LIKE '%{$keyword}%'");
+                }
+            );
         }
         $raw_columns = ['gross_profit'];
 
@@ -3386,14 +3492,14 @@ $name = e($row->name); // Escape for safety
 
         if ($by == 'invoice') {
             $datatable->editColumn('invoice_no', function ($row) {
-                return '<a data-href="'.action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->invoice_no.'</a>';
+                return '<a data-href="' . action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
+                    . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->invoice_no . '</a>';
             });
             $raw_columns[] = 'invoice_no';
         }
 
         return $datatable->rawColumns($raw_columns)
-                  ->make(true);
+            ->make(true);
     }
 
     /**
@@ -3420,7 +3526,7 @@ $name = e($row->name); // Escape for safety
                     'PL.variation_id',
                     '=',
                     'v.id'
-                    )
+                )
                 ->join('product_variations as pv', 'v.product_variation_id', '=', 'pv.id')
                 ->join('products as p', 'PL.product_id', '=', 'p.id')
                 ->join('units as u', 'p.unit_id', '=', 'u.id')
@@ -3468,7 +3574,7 @@ $name = e($row->name); // Escape for safety
                 $start = request()->purchase_start;
                 $end = request()->purchase_end;
                 $query->whereDate('purchase.transaction_date', '>=', $start)
-                            ->whereDate('purchase.transaction_date', '<=', $end);
+                    ->whereDate('purchase.transaction_date', '<=', $end);
             }
             if (! empty(request()->sale_start) && ! empty(request()->sale_end)) {
                 $start = request()->sale_start;
@@ -3476,10 +3582,10 @@ $name = e($row->name); // Escape for safety
                 $query->where(function ($q) use ($start, $end) {
                     $q->where(function ($qr) use ($start, $end) {
                         $qr->whereDate('sale.transaction_date', '>=', $start)
-                           ->whereDate('sale.transaction_date', '<=', $end);
+                            ->whereDate('sale.transaction_date', '<=', $end);
                     })->orWhere(function ($qr) use ($start, $end) {
                         $qr->whereDate('stock_adjustment.transaction_date', '>=', $start)
-                           ->whereDate('stock_adjustment.transaction_date', '<=', $end);
+                            ->whereDate('stock_adjustment.transaction_date', '<=', $end);
                     });
                 });
             }
@@ -3508,66 +3614,66 @@ $name = e($row->name); // Escape for safety
                 ->editColumn('product_name', function ($row) {
                     $product_name = $row->product_name;
                     if ($row->product_type == 'variable') {
-                        $product_name .= ' - '.$row->product_variation.' - '.$row->variation_name;
+                        $product_name .= ' - ' . $row->product_variation . ' - ' . $row->variation_name;
                     }
 
                     return $product_name;
                 })
                 ->editColumn('purchase_date', '{{@format_datetime($purchase_date)}}')
                 ->editColumn('purchase_ref_no', function ($row) {
-                    $html = $row->purchase_type == 'purchase' ? '<a data-href="'.action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->purchase_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->purchase_ref_no.'</a>' : $row->purchase_ref_no;
+                    $html = $row->purchase_type == 'purchase' ? '<a data-href="' . action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->purchase_id])
+                        . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->purchase_ref_no . '</a>' : $row->purchase_ref_no;
                     if ($row->purchase_type == 'opening_stock') {
-                        $html .= '('.__('lang_v1.opening_stock').')';
+                        $html .= '(' . __('lang_v1.opening_stock') . ')';
                     }
 
                     return $html;
                 })
                 ->editColumn('purchase_price', function ($row) {
                     return '<span 
-                    class="purchase_price" data-orig-value="'.$row->purchase_price.'">'.
-                    $this->transactionUtil->num_f($row->purchase_price, true).'</span>';
+                    class="purchase_price" data-orig-value="' . $row->purchase_price . '">' .
+                        $this->transactionUtil->num_f($row->purchase_price, true) . '</span>';
                 })
                 ->editColumn('sell_date', '@if(!empty($sell_line_id)) {{@format_datetime($sell_date)}} @else {{@format_datetime($stock_adjustment_date)}} @endif')
 
                 ->editColumn('sale_invoice_no', function ($row) {
-                    $invoice_no = ! empty($row->sell_line_id) ? $row->sale_invoice_no : $row->stock_adjustment_ref_no.'<br><small>('.__('stock_adjustment.stock_adjustment').'</small)>';
+                    $invoice_no = ! empty($row->sell_line_id) ? $row->sale_invoice_no : $row->stock_adjustment_ref_no . '<br><small>(' . __('stock_adjustment.stock_adjustment') . '</small)>';
 
                     return $invoice_no;
                 })
                 ->editColumn('quantity', function ($row) {
-                    $html = '<span data-is_quantity="true" class="display_currency quantity" data-currency_symbol=false data-orig-value="'.(float) $row->quantity.'" data-unit="'.$row->unit.'" >'.(float) $row->quantity.'</span> '.$row->unit;
+                    $html = '<span data-is_quantity="true" class="display_currency quantity" data-currency_symbol=false data-orig-value="' . (float) $row->quantity . '" data-unit="' . $row->unit . '" >' . (float) $row->quantity . '</span> ' . $row->unit;
 
                     if (empty($row->sell_line_id)) {
-                        $html .= '<br><small>('.__('stock_adjustment.stock_adjustment').'</small)>';
+                        $html .= '<br><small>(' . __('stock_adjustment.stock_adjustment') . '</small)>';
                     }
                     if ($row->qty_returned > 0) {
-                        $html .= '<small><i>(<span data-is_quantity="true" class="display_currency" data-currency_symbol=false>'.(float) $row->quantity.'</span> '.$row->unit.' '.__('lang_v1.returned').')</i></small>';
+                        $html .= '<small><i>(<span data-is_quantity="true" class="display_currency" data-currency_symbol=false>' . (float) $row->quantity . '</span> ' . $row->unit . ' ' . __('lang_v1.returned') . ')</i></small>';
                     }
 
                     return $html;
                 })
-                 ->editColumn('selling_price', function ($row) {
-                     $selling_price = ! empty($row->sell_line_id) ? $row->selling_price : $row->stock_adjustment_price;
+                ->editColumn('selling_price', function ($row) {
+                    $selling_price = ! empty($row->sell_line_id) ? $row->selling_price : $row->stock_adjustment_price;
 
-                     return '<span class="row_selling_price" data-orig-value="'.$selling_price.
-                      '">'.$this->transactionUtil->num_f($selling_price, true).'</span>';
-                 })
+                    return '<span class="row_selling_price" data-orig-value="' . $selling_price .
+                        '">' . $this->transactionUtil->num_f($selling_price, true) . '</span>';
+                })
 
-                 ->addColumn('subtotal', function ($row) {
-                     $selling_price = ! empty($row->sell_line_id) ? $row->selling_price : $row->stock_adjustment_price;
-                     $subtotal = $selling_price * $row->quantity;
+                ->addColumn('subtotal', function ($row) {
+                    $selling_price = ! empty($row->sell_line_id) ? $row->selling_price : $row->stock_adjustment_price;
+                    $subtotal = $selling_price * $row->quantity;
 
-                     return '<span class="row_subtotal" data-orig-value="'.$subtotal.'">'.
-                     $this->transactionUtil->num_f($subtotal, true).'</span>';
-                 })
-                 ->editColumn('supplier', '@if(!empty($supplier_business_name))
+                    return '<span class="row_subtotal" data-orig-value="' . $subtotal . '">' .
+                        $this->transactionUtil->num_f($subtotal, true) . '</span>';
+                })
+                ->editColumn('supplier', '@if(!empty($supplier_business_name))
                  {{$supplier_business_name}},<br> @endif {{$supplier}}')
-                 ->editColumn('customer', '@if(!empty($customer_business_name))
+                ->editColumn('customer', '@if(!empty($customer_business_name))
                  {{$customer_business_name}},<br> @endif {{$customer}}')
                 ->filterColumn('sale_invoice_no', function ($query, $keyword) {
                     $query->where('sale.invoice_no', 'like', ["%{$keyword}%"])
-                          ->orWhere('stock_adjustment.ref_no', 'like', ["%{$keyword}%"]);
+                        ->orWhere('stock_adjustment.ref_no', 'like', ["%{$keyword}%"]);
                 })
 
                 ->rawColumns(['subtotal', 'selling_price', 'quantity', 'purchase_price', 'sale_invoice_no', 'purchase_ref_no', 'supplier', 'customer'])
@@ -3595,35 +3701,35 @@ $name = e($row->name); // Escape for safety
         if (request()->ajax()) {
             $payment_types = $this->transactionUtil->payment_types(null, true, $business_id);
             $purchases = Transaction::leftJoin('contacts', 'transactions.contact_id', '=', 'contacts.id')
-                    ->join(
-                        'business_locations AS BS',
-                        'transactions.location_id',
-                        '=',
-                        'BS.id'
-                    )
-                    ->leftJoin(
-                        'transaction_payments AS TP',
-                        'transactions.id',
-                        '=',
-                        'TP.transaction_id'
-                    )
-                    ->where('transactions.business_id', $business_id)
-                    ->where('transactions.type', 'purchase')
-                    ->with(['payment_lines'])
-                    ->select(
-                        'transactions.id',
-                        'transactions.ref_no',
-                        'contacts.name',
-                        'contacts.contact_id',
-                        'final_total',
-                        'total_before_tax',
-                        'discount_amount',
-                        'discount_type',
-                        'tax_amount',
-                        DB::raw('DATE_FORMAT(transaction_date, "%Y/%m") as purchase_year_month'),
-                        DB::raw('DATE_FORMAT(transaction_date, "%d") as purchase_day')
-                    )
-                    ->groupBy('transactions.id');
+                ->join(
+                    'business_locations AS BS',
+                    'transactions.location_id',
+                    '=',
+                    'BS.id'
+                )
+                ->leftJoin(
+                    'transaction_payments AS TP',
+                    'transactions.id',
+                    '=',
+                    'TP.transaction_id'
+                )
+                ->where('transactions.business_id', $business_id)
+                ->where('transactions.type', 'purchase')
+                ->with(['payment_lines'])
+                ->select(
+                    'transactions.id',
+                    'transactions.ref_no',
+                    'contacts.name',
+                    'contacts.contact_id',
+                    'final_total',
+                    'total_before_tax',
+                    'discount_amount',
+                    'discount_type',
+                    'tax_amount',
+                    DB::raw('DATE_FORMAT(transaction_date, "%Y/%m") as purchase_year_month'),
+                    DB::raw('DATE_FORMAT(transaction_date, "%d") as purchase_day')
+                )
+                ->groupBy('transactions.id');
 
             $permitted_locations = auth()->user()->permitted_locations();
             if ($permitted_locations != 'all') {
@@ -3653,7 +3759,7 @@ $name = e($row->name); // Escape for safety
                 $start = request()->start_date;
                 $end = request()->end_date;
                 $purchases->whereDate('transactions.transaction_date', '>=', $start)
-                            ->whereDate('transactions.transaction_date', '<=', $end);
+                    ->whereDate('transactions.transaction_date', '<=', $end);
             }
 
             if (! auth()->user()->can('purchase.view') && auth()->user()->can('view_own_purchase')) {
@@ -3683,7 +3789,7 @@ $name = e($row->name); // Escape for safety
                             $discount = $row->total_before_tax * ($discount / 100);
                         }
 
-                        return '<span class="display_currency total-discount" data-currency_symbol="true" data-orig-value="'.$discount.'">'.$discount.'</span>';
+                        return '<span class="display_currency total-discount" data-currency_symbol="true" data-orig-value="' . $discount . '">' . $discount . '</span>';
                     }
                 )
                 ->addColumn('payment_year_month', function ($row) {
@@ -3712,7 +3818,7 @@ $name = e($row->name); // Escape for safety
                         $payment_method = __('lang_v1.checkout_multi_pay');
                     }
 
-                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="'.$payment_method.'" data-status-name="'.$payment_method.'">'.$payment_method.'</span>' : '';
+                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
 
                     return $html;
                 })
@@ -3723,7 +3829,8 @@ $name = e($row->name); // Escape for safety
                         } else {
                             return '';
                         }
-                    }, ])
+                    },
+                ])
                 ->rawColumns(['final_total', 'total_before_tax', 'tax_amount', 'discount_amount', 'payment_method'])
                 ->make(true);
         }
@@ -3817,18 +3924,18 @@ $name = e($row->name); // Escape for safety
 
         if (request()->ajax()) {
             $activities = Activity::with(['subject'])
-                                ->leftjoin('users as u', 'u.id', '=', 'activity_log.causer_id')
-                                ->where('activity_log.business_id', $business_id)
-                                ->select(
-                                    'activity_log.*',
-                                    DB::raw("CONCAT(COALESCE(u.surname, ''), ' ', COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) as created_by")
-                                );
+                ->leftjoin('users as u', 'u.id', '=', 'activity_log.causer_id')
+                ->where('activity_log.business_id', $business_id)
+                ->select(
+                    'activity_log.*',
+                    DB::raw("CONCAT(COALESCE(u.surname, ''), ' ', COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) as created_by")
+                );
 
             if (! empty(request()->start_date) && ! empty(request()->end_date)) {
                 $start = request()->start_date;
                 $end = request()->end_date;
                 $activities->whereDate('activity_log.created_at', '>=', $start)
-                            ->whereDate('activity_log.created_at', '<=', $end);
+                    ->whereDate('activity_log.created_at', '<=', $end);
             }
 
             if (! empty(request()->user_id)) {
@@ -3841,8 +3948,17 @@ $name = e($row->name); // Escape for safety
                     $activities->where('subject_type', \App\Contact::class);
                 } elseif ($subject_type == 'user') {
                     $activities->where('subject_type', \App\User::class);
-                } elseif (in_array($subject_type, ['sell', 'purchase',
-                    'sales_order', 'purchase_order', 'sell_return', 'purchase_return', 'sell_transfer', 'expense', 'purchase_order', ])) {
+                } elseif (in_array($subject_type, [
+                    'sell',
+                    'purchase',
+                    'sales_order',
+                    'purchase_order',
+                    'sell_return',
+                    'purchase_return',
+                    'sell_transfer',
+                    'expense',
+                    'purchase_order',
+                ])) {
                     $activities->where('subject_type', \App\Transaction::class);
                     $activities->whereHasMorph('subject', Transaction::class, function ($q) use ($subject_type) {
                         $q->where('type', $subject_type);
@@ -3858,68 +3974,68 @@ $name = e($row->name); // Escape for safety
             $statuses = array_merge($sell_statuses, $sales_order_statuses, $purchase_statuses);
 
             return Datatables::of($activities)
-                            ->editColumn('created_at', '{{@format_datetime($created_at)}}')
-                            ->addColumn('subject_type', function ($row) use ($transaction_types) {
-                                $subject_type = '';
-                                if ($row->subject_type == \App\Contact::class) {
-                                    $subject_type = __('contact.contact');
-                                } elseif ($row->subject_type == \App\User::class) {
-                                    $subject_type = __('report.user');
-                                } elseif ($row->subject_type == \App\Transaction::class && ! empty($row->subject->type)) {
-                                    $subject_type = isset($transaction_types[$row->subject->type]) ? $transaction_types[$row->subject->type] : '';
-                                } elseif (($row->subject_type == \App\TransactionPayment::class)) {
-                                    $subject_type = __('lang_v1.payment');
-                                }
+                ->editColumn('created_at', '{{@format_datetime($created_at)}}')
+                ->addColumn('subject_type', function ($row) use ($transaction_types) {
+                    $subject_type = '';
+                    if ($row->subject_type == \App\Contact::class) {
+                        $subject_type = __('contact.contact');
+                    } elseif ($row->subject_type == \App\User::class) {
+                        $subject_type = __('report.user');
+                    } elseif ($row->subject_type == \App\Transaction::class && ! empty($row->subject->type)) {
+                        $subject_type = isset($transaction_types[$row->subject->type]) ? $transaction_types[$row->subject->type] : '';
+                    } elseif (($row->subject_type == \App\TransactionPayment::class)) {
+                        $subject_type = __('lang_v1.payment');
+                    }
 
-                                return $subject_type;
-                            })
-                            ->addColumn('note', function ($row) use ($statuses, $shipping_statuses) {
-                                $html = '';
-                                if (! empty($row->subject->ref_no)) {
-                                    $html .= __('purchase.ref_no').': '.$row->subject->ref_no.'<br>';
-                                }
-                                if (! empty($row->subject->invoice_no)) {
-                                    $html .= __('sale.invoice_no').': '.$row->subject->invoice_no.'<br>';
-                                }
-                                if ($row->subject_type == \App\Transaction::class && ! empty($row->subject) && in_array($row->subject->type, ['sell', 'purchase'])) {
-                                    $html .= view('sale_pos.partials.activity_row', ['activity' => $row, 'statuses' => $statuses, 'shipping_statuses' => $shipping_statuses])->render();
-                                } else {
-                                    $update_note = $row->getExtraProperty('update_note');
-                                    if (! empty($update_note) && ! is_array($update_note)) {
-                                        $html .= $update_note;
-                                    }
-                                }
+                    return $subject_type;
+                })
+                ->addColumn('note', function ($row) use ($statuses, $shipping_statuses) {
+                    $html = '';
+                    if (! empty($row->subject->ref_no)) {
+                        $html .= __('purchase.ref_no') . ': ' . $row->subject->ref_no . '<br>';
+                    }
+                    if (! empty($row->subject->invoice_no)) {
+                        $html .= __('sale.invoice_no') . ': ' . $row->subject->invoice_no . '<br>';
+                    }
+                    if ($row->subject_type == \App\Transaction::class && ! empty($row->subject) && in_array($row->subject->type, ['sell', 'purchase'])) {
+                        $html .= view('sale_pos.partials.activity_row', ['activity' => $row, 'statuses' => $statuses, 'shipping_statuses' => $shipping_statuses])->render();
+                    } else {
+                        $update_note = $row->getExtraProperty('update_note');
+                        if (! empty($update_note) && ! is_array($update_note)) {
+                            $html .= $update_note;
+                        }
+                    }
 
-                                if ($row->description == 'contact_deleted') {
-                                    $html .= $row->getExtraProperty('supplier_business_name') ?? '';
-                                    $html .= '<br>';
-                                }
+                    if ($row->description == 'contact_deleted') {
+                        $html .= $row->getExtraProperty('supplier_business_name') ?? '';
+                        $html .= '<br>';
+                    }
 
-                                if (! empty($row->getExtraProperty('name'))) {
-                                    $html .= __('user.name').': '.$row->getExtraProperty('name').'<br>';
-                                }
+                    if (! empty($row->getExtraProperty('name'))) {
+                        $html .= __('user.name') . ': ' . $row->getExtraProperty('name') . '<br>';
+                    }
 
-                                if (! empty($row->getExtraProperty('id'))) {
-                                    $html .= 'id: '.$row->getExtraProperty('id').'<br>';
-                                }
-                                if (! empty($row->getExtraProperty('invoice_no'))) {
-                                    $html .= __('sale.invoice_no').': '.$row->getExtraProperty('invoice_no');
-                                }
+                    if (! empty($row->getExtraProperty('id'))) {
+                        $html .= 'id: ' . $row->getExtraProperty('id') . '<br>';
+                    }
+                    if (! empty($row->getExtraProperty('invoice_no'))) {
+                        $html .= __('sale.invoice_no') . ': ' . $row->getExtraProperty('invoice_no');
+                    }
 
-                                if (! empty($row->getExtraProperty('ref_no'))) {
-                                    $html .= __('purchase.ref_no').': '.$row->getExtraProperty('ref_no');
-                                }
+                    if (! empty($row->getExtraProperty('ref_no'))) {
+                        $html .= __('purchase.ref_no') . ': ' . $row->getExtraProperty('ref_no');
+                    }
 
-                                return $html;
-                            })
-                            ->filterColumn('created_by', function ($query, $keyword) {
-                                $query->whereRaw("CONCAT(COALESCE(surname, ''), ' ', COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) like ?", ["%{$keyword}%"]);
-                            })
-                            ->editColumn('description', function ($row) {
-                                return __('lang_v1.'.$row->description);
-                            })
-                            ->rawColumns(['note'])
-                            ->make(true);
+                    return $html;
+                })
+                ->filterColumn('created_by', function ($query, $keyword) {
+                    $query->whereRaw("CONCAT(COALESCE(surname, ''), ' ', COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) like ?", ["%{$keyword}%"]);
+                })
+                ->editColumn('description', function ($row) {
+                    return __('lang_v1.' . $row->description);
+                })
+                ->rawColumns(['note'])
+                ->make(true);
         }
 
         $users = User::allUsersDropdown($business_id, false);
@@ -3935,10 +4051,10 @@ $name = e($row->name); // Escape for safety
 
         $business_id = $request->session()->get('user.business_id');
         $taxes = TaxRate::where('business_id', $business_id)
-                        ->where('is_tax_group', 0)
-                        ->select(['id', 'name', 'amount'])
-                        ->get()
-                        ->toArray();
+            ->where('is_tax_group', 0)
+            ->select(['id', 'name', 'amount'])
+            ->get()
+            ->toArray();
 
         if ($request->ajax()) {
             $query = TransactionSellLine::join(
@@ -4012,7 +4128,7 @@ $name = e($row->name); // Escape for safety
                 }
             }
             foreach ($taxes as $tax) {
-                $col = 'tax_'.$tax['id'];
+                $col = 'tax_' . $tax['id'];
                 $raw_cols[] = $col;
                 $datatable->addColumn($col, function ($row) use ($tax, $col, $group_taxes) {
                     $sub_tax_share = 0;
@@ -4024,7 +4140,7 @@ $name = e($row->name); // Escape for safety
                         //ignore child sell line of combo product
                         $class = is_null($row->parent_sell_line_id) ? $col : '';
 
-                        return '<span class="'.$class.'" data-orig-value="'.$sub_tax_share.'">'.$this->transactionUtil->num_f($sub_tax_share).'</span>';
+                        return '<span class="' . $class . '" data-orig-value="' . $sub_tax_share . '">' . $this->transactionUtil->num_f($sub_tax_share) . '</span>';
                     } else {
                         return '';
                     }
@@ -4036,21 +4152,21 @@ $name = e($row->name); // Escape for safety
                 //ignore child sell line of combo product
                 $class = is_null($row->parent_sell_line_id) ? 'taxable_value' : '';
 
-                return '<span class="'.$class.'"data-orig-value="'.$taxable_value.'">'.$this->transactionUtil->num_f($taxable_value).'</span>';
+                return '<span class="' . $class . '"data-orig-value="' . $taxable_value . '">' . $this->transactionUtil->num_f($taxable_value) . '</span>';
             })
-                 ->editColumn('invoice_no', function ($row) {
-                     return '<a data-href="'.action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->invoice_no.'</a>';
-                 })
+                ->editColumn('invoice_no', function ($row) {
+                    return '<a data-href="' . action([\App\Http\Controllers\SellController::class, 'show'], [$row->transaction_id])
+                        . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->invoice_no . '</a>';
+                })
                 ->editColumn('transaction_date', '{{@format_datetime($transaction_date)}}')
                 ->editColumn('sell_qty', function ($row) {
-                    return $this->transactionUtil->num_f($row->sell_qty, false, null, true).' '.$row->unit;
+                    return $this->transactionUtil->num_f($row->sell_qty, false, null, true) . ' ' . $row->unit;
                 })
                 ->editColumn('unit_price', function ($row) {
-                    return '<span data-orig-value="'.$row->unit_price.'">'.$this->transactionUtil->num_f($row->unit_price).'</span>';
+                    return '<span data-orig-value="' . $row->unit_price . '">' . $this->transactionUtil->num_f($row->unit_price) . '</span>';
                 })
                 ->editColumn('line_total', function ($row) {
-                    return '<span data-orig-value="'.$row->line_total.'">'.$this->transactionUtil->num_f($row->line_total).'</span>';
+                    return '<span data-orig-value="' . $row->line_total . '">' . $this->transactionUtil->num_f($row->line_total) . '</span>';
                 })
                 ->editColumn(
                     'discount_amount',
@@ -4084,10 +4200,10 @@ $name = e($row->name); // Escape for safety
 
         $business_id = $request->session()->get('user.business_id');
         $taxes = TaxRate::where('business_id', $business_id)
-                        ->where('is_tax_group', 0)
-                        ->select(['id', 'name', 'amount'])
-                        ->get()
-                        ->toArray();
+            ->where('is_tax_group', 0)
+            ->select(['id', 'name', 'amount'])
+            ->get()
+            ->toArray();
 
         if ($request->ajax()) {
             $query = PurchaseLine::join(
@@ -4159,7 +4275,7 @@ $name = e($row->name); // Escape for safety
                 }
             }
             foreach ($taxes as $tax) {
-                $col = 'tax_'.$tax['id'];
+                $col = 'tax_' . $tax['id'];
                 $raw_cols[] = $col;
                 $datatable->addColumn($col, function ($row) use ($tax, $group_taxes) {
                     $sub_tax_share = 0;
@@ -4168,7 +4284,7 @@ $name = e($row->name); // Escape for safety
                     }
 
                     if ($sub_tax_share > 0) {
-                        return '<span data-orig-value="'.$sub_tax_share.'">'.$this->transactionUtil->num_f($sub_tax_share).'</span>';
+                        return '<span data-orig-value="' . $sub_tax_share . '">' . $this->transactionUtil->num_f($sub_tax_share) . '</span>';
                     } else {
                         return '';
                     }
@@ -4178,21 +4294,21 @@ $name = e($row->name); // Escape for safety
             return $datatable->addColumn('taxable_value', function ($row) {
                 $taxable_value = $row->unit_price_after_discount * $row->purchase_qty;
 
-                return '<span class="taxable_value"data-orig-value="'.$taxable_value.'">'.$this->transactionUtil->num_f($taxable_value).'</span>';
+                return '<span class="taxable_value"data-orig-value="' . $taxable_value . '">' . $this->transactionUtil->num_f($taxable_value) . '</span>';
             })
-                 ->editColumn('ref_no', function ($row) {
-                     return '<a data-href="'.action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
-                            .'" href="#" data-container=".view_modal" class="btn-modal">'.$row->ref_no.'</a>';
-                 })
+                ->editColumn('ref_no', function ($row) {
+                    return '<a data-href="' . action([\App\Http\Controllers\PurchaseController::class, 'show'], [$row->transaction_id])
+                        . '" href="#" data-container=".view_modal" class="btn-modal">' . $row->ref_no . '</a>';
+                })
                 ->editColumn('transaction_date', '{{@format_datetime($transaction_date)}}')
                 ->editColumn('purchase_qty', function ($row) {
-                    return $this->transactionUtil->num_f($row->purchase_qty, false, null, true).' '.$row->unit;
+                    return $this->transactionUtil->num_f($row->purchase_qty, false, null, true) . ' ' . $row->unit;
                 })
                 ->editColumn('unit_price', function ($row) {
-                    return '<span data-orig-value="'.$row->unit_price.'">'.$this->transactionUtil->num_f($row->unit_price).'</span>';
+                    return '<span data-orig-value="' . $row->unit_price . '">' . $this->transactionUtil->num_f($row->unit_price) . '</span>';
                 })
                 ->editColumn('line_total', function ($row) {
-                    return '<span data-orig-value="'.$row->line_total.'">'.$this->transactionUtil->num_f($row->line_total).'</span>';
+                    return '<span data-orig-value="' . $row->line_total . '">' . $this->transactionUtil->num_f($row->line_total) . '</span>';
                 })
                 ->addColumn(
                     'discount_amount',
