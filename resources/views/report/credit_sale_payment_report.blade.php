@@ -3,6 +3,11 @@
 @section('css')
 <style>
       @media print {
+            @page {
+                  size: A4;
+                  margin: 20mm;
+                  /* adjust margins if needed */
+            }
 
             html,
             body {
@@ -95,17 +100,17 @@
       </div>
       <br>
       <div class="row">
-        <div class="col-xs-12">
-            @component('components.widget')
-                <h3 class="text-muted">
-                    Shop: 
-                    <span class="location_name">
-                        <i class="fas fa-sync fa-spin fa-fw"></i>
-                    </span>
-                </h3>
-            @endcomponent
-        </div>
-    </div>
+            <div class="col-xs-12">
+                  @component('components.widget')
+                  <h3 class="text-muted">
+                        Shop:
+                        <span class="location_name">
+                              <i class="fas fa-sync fa-spin fa-fw"></i>
+                        </span>
+                  </h3>
+                  @endcomponent
+            </div>
+      </div>
       <div class="row">
             <div class="col-xs-6">
                   @component('components.widget', ['title' => 'Payment Method Wise'])
@@ -147,7 +152,7 @@
                   @endcomponent
             </div>
       </div>
-      
+
 
       <div class="row no-print">
             <div class="col-sm-12">
