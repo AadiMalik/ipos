@@ -190,7 +190,7 @@ class ReportController extends Controller
      */
     public function getCreditSalePayment(Request $request)
     {
-        if (! auth()->user()->can('purchase_n_sell_report.view')) {
+        if (! auth()->user()->can('get_credit_sale_payment_report.view')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -2637,7 +2637,7 @@ class ReportController extends Controller
      */
     public function sellPaymentReport(Request $request)
     {
-        if (! auth()->user()->can('purchase_n_sell_report.view')) {
+        if (! auth()->user()->can('transaction_report.view')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -2788,7 +2788,7 @@ class ReportController extends Controller
      */
     public function agentCommissionReport(Request $request)
     {
-        if (! auth()->user()->can('purchase_n_sell_report.view')) {
+        if (! auth()->user()->can('agent_commission_report.view')) {
             abort(403, 'Unauthorized action.');
         }
         $business_id = $request->session()->get('user.business_id');

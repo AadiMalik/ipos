@@ -677,19 +677,22 @@ class AdminSidebarMenu
                                 __('lang_v1.purchase_payment_report'),
                                 ['icon' => '', 'active' => request()->segment(2) == 'purchase-payment-report']
                             );
-
+                        }
+                        if (auth()->user()->can('transaction_report.view')) {
                             $sub->url(
                                 action([\App\Http\Controllers\ReportController::class, 'sellPaymentReport']),
                                 'Transaction Report',
                                 ['icon' => '', 'active' => request()->segment(2) == 'sell-payment-report']
                             );
-
+                        }
+                        if (auth()->user()->can('get_credit_sale_payment_report.view')) {
                             $sub->url(
                                 action([\App\Http\Controllers\ReportController::class, 'getCreditSalePayment']),
                                 'Credit Sale Payment Report',
                                 ['icon' => '', 'active' => request()->segment(2) == 'credit-sale-payment-report']
                             );
                         }
+                        
                         if (in_array('expenses', $enabled_modules) && auth()->user()->can('expense_report.view')) {
                             $sub->url(
                                 action([\App\Http\Controllers\ReportController::class, 'getExpenseReport']),
@@ -711,7 +714,7 @@ class AdminSidebarMenu
                                 ['icon' => '', 'active' => request()->segment(2) == 'sales-representative-report']
                             );
                         }
-                        if (auth()->user()->can('sales_representative.view')) {
+                        if (auth()->user()->can('agent_commission_report.view')) {
                             $sub->url(
                                 action([\App\Http\Controllers\ReportController::class, 'agentCommissionReport']),
                                 'Agent Commission Report',

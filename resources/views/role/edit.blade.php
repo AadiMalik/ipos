@@ -1417,6 +1417,30 @@
               </label>
             </div>
           </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'transaction_report.view', in_array('transaction_report.view', $role_permissions), 
+                [ 'class' => 'input-icheck']); !!} View transaction report
+              </label>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'get_credit_sale_payment_report.view', in_array('get_credit_sale_payment_report.view', $role_permissions), 
+                [ 'class' => 'input-icheck']); !!} View credit sale payment report
+              </label>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'agent_commission_report.view', in_array('agent_commission_report.view', $role_permissions), 
+                [ 'class' => 'input-icheck']); !!} View agent commision report
+              </label>
+            </div>
+          </div>
         </div>
         </div>
         <hr>

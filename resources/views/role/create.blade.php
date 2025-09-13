@@ -1421,7 +1421,31 @@
                 [ 'class' => 'input-icheck']); !!} {{ __( 'lang_v1.view_product_stock_value' ) }}
               </label>
             </div>
-          </div> 
+          </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'transaction_report.view', false, 
+                [ 'class' => 'input-icheck']); !!} View transaction report
+              </label>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'get_credit_sale_payment_report.view', false, 
+                [ 'class' => 'input-icheck']); !!} View credit sale payment report
+              </label>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'agent_commission_report.view', false, 
+                [ 'class' => 'input-icheck']); !!} View agent commision report
+              </label>
+            </div>
+          </div>
 
         </div>
         </div>
