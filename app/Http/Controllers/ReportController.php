@@ -248,6 +248,69 @@ class ReportController extends Controller
             ->with(compact('business_locations'));
     }
 
+    public function getCustomerSaleLedgerReport(Request $request)
+    {
+        if (! auth()->user()->can('customer_sale_ledger_report.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $location_id = $request->get('location_id', null);
+
+            $query = Transaction::leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
+                ->where('transactions.business_id', $business_id)
+                ->where('transactions.type', 'sell')
+                ->where('transactions.status', 'final');
+
+            // ✅ Date filter
+            $start_date = $request->get('start_date');
+            $end_date = $request->get('end_date');
+            if (! empty($start_date) && ! empty($end_date)) {
+                $query->whereBetween(DB::raw('date(transactions.transaction_date)'), [$start_date, $end_date]);
+            }
+
+            // ✅ Location filter
+            $permitted_locations = auth()->user()->permitted_locations();
+            if ($permitted_locations != 'all') {
+                $query->whereIn('transactions.location_id', $permitted_locations);
+            }
+            if (! empty($location_id)) {
+                $query->where('transactions.location_id', $location_id);
+            }
+
+            // ✅ Customer Wise Aggregation
+            $customers = $query->select(
+                'c.name as customer_name',
+                DB::raw('SUM(transactions.final_total) as total_sales'),
+                DB::raw('SUM(transactions.payment_status = "paid" OR 0) as dummy'), // force group
+                DB::raw('COALESCE(SUM((SELECT SUM(tp.amount) FROM transaction_payments tp WHERE tp.transaction_id = transactions.id)),0) as total_paid'),
+                DB::raw('(SUM(transactions.final_total) - COALESCE(SUM((SELECT SUM(tp.amount) FROM transaction_payments tp WHERE tp.transaction_id = transactions.id)),0)) as balance_due')
+            )
+                ->groupBy('c.id', 'c.name');
+
+            return DataTables::of($customers)
+                ->addIndexColumn() // ✅ Sr. number
+                ->editColumn('total_sales', function ($row) {
+                    return $this->transactionUtil->num_f($row->total_sales, true);
+                })
+                ->editColumn('total_paid', function ($row) {
+                    return $this->transactionUtil->num_f($row->total_paid, true);
+                })
+                ->editColumn('balance_due', function ($row) {
+                    return $this->transactionUtil->num_f($row->balance_due, true);
+                })
+                ->make(true);
+        }
+
+        $business_locations = BusinessLocation::forDropdown($business_id);
+
+        return view('report.customer_sale_ledger_report')
+            ->with(compact('business_locations'));
+    }
+
+
 
     /**
      * Shows report for Supplier

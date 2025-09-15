@@ -818,7 +818,7 @@ $(document).ready(function () {
             product_purchase_report.ajax.reload();
         });
     }
-    
+
     $(
         '#product_purchase_report_form #variation_id, \
         #product_purchase_report_form #location_id, \
@@ -829,7 +829,7 @@ $(document).ready(function () {
         product_purchase_report.ajax.reload();
     });
 
-    
+
     product_purchase_report = $('table#product_purchase_report_table').DataTable({
         processing: true,
         serverSide: true,
@@ -983,6 +983,95 @@ $(document).ready(function () {
             { data: 'sold_stock', name: 'sold_stock', searchable: false },
             { data: 'balance_stock', name: 'balance_stock', searchable: false },
         ],
+    });
+
+    //Customer Sale Ledger Report
+    if ($('#customer_sale_ledger_date_filter').length == 1) {
+        $('#customer_sale_ledger_date_filter').daterangepicker(dateRangeSettings, function (start, end) {
+            $('#customer_sale_ledger_date_filter').val(
+                start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
+            );
+            customer_sale_ledger_report.ajax.reload();
+        });
+        $('#customer_sale_ledger_date_filter').on('cancel.daterangepicker', function (ev, picker) {
+            $('#customer_sale_ledger_date_filter').val('');
+            customer_sale_ledger_report.ajax.reload();
+        });
+    }
+    $(
+        '#customer_sale_ledger_report_form #location_id'
+    ).change(function () {
+        customer_sale_ledger_report.ajax.reload();
+    });
+
+    customer_sale_ledger_report = $('table#customer_sale_ledger_report_table').DataTable({
+        processing: true,
+        serverSide: true,
+        aaSorting: [[3, 'desc']],
+        ajax: {
+            url: '/reports/customer-sale-ledger-report',
+            data: function (d) {
+                var start = '';
+                var end = '';
+                if ($('#customer_sale_ledger_date_filter').val()) {
+                    start = $('input#customer_sale_ledger_date_filter')
+                        .data('daterangepicker')
+                        .startDate.format('YYYY-MM-DD');
+                    end = $('input#customer_sale_ledger_date_filter')
+                        .data('daterangepicker')
+                        .endDate.format('YYYY-MM-DD');
+                }
+                d.start_date = start;
+                d.end_date = end;
+                d.location_id = $('select#location_id').val();
+            },
+        },
+        columns: [
+            {
+                data: null,
+                name: 'sr',
+                searchable: false,
+                orderable: false,
+                render: function (data, type, row, meta) {
+                    return meta.row + meta.settings._iDisplayStart + 1;
+                }
+            },
+            { data: 'customer_name', name: 'customer_name' },
+            { data: 'total_sales', name: 'total_sales' },
+            { data: 'total_paid', name: 'total_paid' },
+            { data: 'balance_due', name: 'balance_due' },
+        ],
+        footerCallback: function (row, data, start, end, display) {
+            var api = this.api();
+        
+            // Helper: string ko number me convert kare
+            var intVal = function (i) {
+                if (typeof i === 'string') {
+                    return parseFloat(i.replace(/,/g, '').replace(/[^\d.-]/g, '')) || 0;
+                }
+                return typeof i === 'number' ? i : 0;
+            };
+        
+            // Total Sales
+            var total_sales = api.column(2, { page: 'current' }).data().reduce(function (a, b) {
+                return intVal(a) + intVal(b);
+            }, 0);
+        
+            // Total Paid
+            var total_paid = api.column(3, { page: 'current' }).data().reduce(function (a, b) {
+                return intVal(a) + intVal(b);
+            }, 0);
+        
+            // Balance Due
+            var total_balance = api.column(4, { page: 'current' }).data().reduce(function (a, b) {
+                return intVal(a) + intVal(b);
+            }, 0);
+        
+            // Footer me show karna
+            $(api.column(2).footer()).html(total_sales.toFixed(2));
+            $(api.column(3).footer()).html(total_paid.toFixed(2));
+            $(api.column(4).footer()).html(total_balance.toFixed(2));
+        }        
     });
 
     if ($('#search_product').length > 0) {

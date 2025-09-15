@@ -1457,6 +1457,14 @@
               </label>
             </div>
           </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'customer_sale_ledger_report.view', in_array('customer_sale_ledger_report.view', $role_permissions), 
+                [ 'class' => 'input-icheck']); !!} View customer sale ledger report
+              </label>
+            </div>
+          </div>
         </div>
         </div>
         <hr>

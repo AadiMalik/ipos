@@ -764,6 +764,13 @@ class AdminSidebarMenu
                                 ['icon' => '', 'active' => request()->segment(2) == 'product-stock-movement-report']
                             );
                         }
+                        if (auth()->user()->can('customer_sale_ledger_report.view')) {
+                            $sub->url(
+                                action([\App\Http\Controllers\ReportController::class, 'getCustomerSaleLedgerReport']),
+                                'Customer Sale Ledger Report',
+                                ['icon' => '', 'active' => request()->segment(2) == 'customer-sale-ledger-report']
+                            );
+                        }
 
                         if ($is_admin) {
                             $sub->url(
