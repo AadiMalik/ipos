@@ -1446,6 +1446,22 @@
               </label>
             </div>
           </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'product_valuation_report.view', false, 
+                [ 'class' => 'input-icheck']); !!} View product valuation report
+              </label>
+            </div>
+          </div>
+          <div class="col-md-12">
+            <div class="checkbox">
+              <label>
+                {!! Form::checkbox('permissions[]', 'product_stock_movement_report.view', false, 
+                [ 'class' => 'input-icheck']); !!} View product stock movement report
+              </label>
+            </div>
+          </div>
 
         </div>
         </div>

@@ -750,6 +750,20 @@ class AdminSidebarMenu
                                 ['icon' => '', 'active' => request()->segment(2) == 'service-staff-report']
                             );
                         }
+                        if (auth()->user()->can('product_valuation_report.view')) {
+                            $sub->url(
+                                action([\App\Http\Controllers\ReportController::class, 'getProductValuationReport']),
+                                'Product Valuation Report',
+                                ['icon' => '', 'active' => request()->segment(2) == 'product-valuation-report']
+                            );
+                        }
+                        if (auth()->user()->can('product_stock_movement_report.view')) {
+                            $sub->url(
+                                action([\App\Http\Controllers\ReportController::class, 'getProductStockMovementReport']),
+                                'Product Stock Movement Report',
+                                ['icon' => '', 'active' => request()->segment(2) == 'product-stock-movement-report']
+                            );
+                        }
 
                         if ($is_admin) {
                             $sub->url(

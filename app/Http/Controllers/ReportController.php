@@ -670,6 +670,97 @@ class ReportController extends Controller
             ->with(compact('categories', 'brands', 'units', 'business_locations', 'show_manufacturing_data'));
     }
 
+    public function getProductValuationReport(Request $request)
+    {
+        if (! auth()->user()->can('product_valuation_report.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id']);
+
+            $products = $this->productUtil->getProductValuationDetails($business_id, $filters);
+
+            $datatable = Datatables::of($products)
+                ->editColumn('category_name', function ($row) {
+                    return $row->category_name ?? '--';
+                })
+                ->editColumn('product', function ($row) {
+                    return $row->product;
+                })
+                ->editColumn('purchase_price', function ($row) {
+                    return $this->transactionUtil->num_f($row->purchase_price, true);
+                })
+                ->editColumn('sale_price', function ($row) {
+                    return $this->transactionUtil->num_f($row->sale_price, true);
+                })
+                ->editColumn('profit', function ($row) {
+                    return $this->transactionUtil->num_f($row->profit, true);
+                });
+
+            return $datatable->make(true);
+        }
+
+        $categories = Category::forDropdown($business_id, 'product');
+        $business_locations = BusinessLocation::forDropdown($business_id, true);
+
+        return view('report.product_valuation_report')
+            ->with(compact('categories', 'business_locations'));
+    }
+
+    // product stock movement report
+    public function getProductStockMovementReport(Request $request)
+    {
+        if (! auth()->user()->can('product_stock_movement_report.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $business_id = $request->session()->get('user.business_id');
+
+        if ($request->ajax()) {
+            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id']);
+
+            // call util function jo maine pehle banaya tha
+            $products = $this->productUtil->getProductStockMovementReport($business_id, $filters);
+
+            $datatable = Datatables::of($products)
+                ->editColumn('category_name', function ($row) {
+                    return $row->category_name ?? '--';
+                })
+                ->editColumn('product', function ($row) {
+                    return $row->product;
+                })
+                ->editColumn('product_ref', function ($row) {
+                    return $row->product_ref;
+                })
+                ->editColumn('opening_stock', function ($row) {
+                    return $this->transactionUtil->num_f($row->opening_stock, false);
+                })
+                ->editColumn('purchase_stock', function ($row) {
+                    return $this->transactionUtil->num_f($row->purchase_stock, false);
+                })
+                ->editColumn('sold_stock', function ($row) {
+                    return $this->transactionUtil->num_f($row->sold_stock, false);
+                })
+                ->editColumn('balance_stock', function ($row) {
+                    return $this->transactionUtil->num_f($row->balance_stock, false);
+                });
+
+            return $datatable->make(true);
+        }
+
+        $categories = Category::forDropdown($business_id, 'product');
+        $business_locations = BusinessLocation::forDropdown($business_id, true);
+
+        return view('report.product_stock_movement_report')
+            ->with(compact('categories', 'business_locations'));
+    }
+
+
+
+
     // // this function copy of above get route becouse of large size parameter 
     // public function postStockReport(Request $request){
     //     if ($request->ajax()) {

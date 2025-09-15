@@ -287,6 +287,8 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::post('/reports/stock-expiry-update', [ReportController::class, 'updateStockExpiryReport'])->name('updateStockExpiryReport');
     Route::get('/reports/customer-group', [ReportController::class, 'getCustomerGroup']);
     Route::get('/reports/product-purchase-report', [ReportController::class, 'getproductPurchaseReport']);
+    Route::get('/reports/product-valuation-report', [ReportController::class, 'getProductValuationReport']);
+    Route::get('/reports/product-stock-movement-report', [ReportController::class, 'getProductStockMovementReport']);
     Route::get('/reports/product-sell-grouped-by', [ReportController::class, 'productSellReportBy']);
     Route::get('/reports/product-sell-report', [ReportController::class, 'getproductSellReport']);
     Route::get('/reports/product-sell-report-with-purchase', [ReportController::class, 'getproductSellReportWithPurchase']);
