@@ -1127,21 +1127,17 @@ $(document).ready(function () {
                     start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
                 );
                 product_sell_report.ajax.reload();
-                product_sell_grouped_report.ajax.reload();
+                // product_sell_grouped_report.ajax.reload();
                 product_sell_report_with_purchase_table.ajax.reload();
                 $('.nav-tabs li.active').find('a[data-toggle="tab"]').trigger('shown.bs.tab');
             }
         );
-        $('#product_sr_date_filter').on('apply.daterangepicker', function (ev, picker) {
-            picker.hide();
-        });
         $('#product_sr_date_filter').on('cancel.daterangepicker', function (ev, picker) {
             $('#product_sr_date_filter').val('');
             product_sell_report.ajax.reload();
-            product_sell_grouped_report.ajax.reload();
+            // product_sell_grouped_report.ajax.reload();
             product_sell_report_with_purchase_table.ajax.reload();
             $('.nav-tabs li.active').find('a[data-toggle="tab"]').trigger('shown.bs.tab');
-            picker.hide();
         });
 
         $('#product_sr_start_time, #product_sr_end_time').datetimepicker({

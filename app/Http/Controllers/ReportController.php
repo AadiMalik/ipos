@@ -199,46 +199,57 @@ class ReportController extends Controller
         if ($request->ajax()) {
             $location_id = $request->get('location_id', null);
 
-            $query = TransactionPayment::leftJoin('transactions as t', function ($join) use ($business_id) {
+            // Base query for Transaction Payments (for received payments)
+            $paymentQuery = TransactionPayment::leftJoin('transactions as t', function ($join) use ($business_id) {
                 $join->on('transaction_payments.transaction_id', '=', 't.id')
                     ->where('t.business_id', $business_id)
                     ->where('t.type', 'sell');
             })
-                ->leftJoin('contacts as c', 't.contact_id', '=', 'c.id')
                 ->where('transaction_payments.business_id', $business_id);
 
-            // ✅ Apply date filter
+            // Base query for Transactions (for customer credit/due)
+            $customerQuery = Transaction::leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
+                ->where('transactions.business_id', $business_id)
+                ->where('transactions.type', 'sell')
+                ->where('transactions.status', 'final') // ✅ only final sales
+                ->where('transactions.payment_status', 'due'); // ✅ only due
+
+            // ✅ Date filter
             $start_date = $request->get('start_date');
             $end_date = $request->get('end_date');
             if (! empty($start_date) && ! empty($end_date)) {
-                $query->whereBetween(DB::raw('date(paid_on)'), [$start_date, $end_date]);
+                $paymentQuery->whereBetween(DB::raw('date(paid_on)'), [$start_date, $end_date]);
+                $customerQuery->whereBetween(DB::raw('date(transaction_date)'), [$start_date, $end_date]);
             }
 
             // ✅ Location filter
             $permitted_locations = auth()->user()->permitted_locations();
             if ($permitted_locations != 'all') {
-                $query->whereIn('t.location_id', $permitted_locations);
+                $paymentQuery->whereIn('t.location_id', $permitted_locations);
+                $customerQuery->whereIn('transactions.location_id', $permitted_locations);
             }
             if (! empty($location_id)) {
-                $query->where('t.location_id', $location_id);
+                $paymentQuery->where('t.location_id', $location_id);
+                $customerQuery->where('transactions.location_id', $location_id);
             }
 
-            // ✅ Payment Method Wise Totals
-            $payment_method_payments = (clone $query)
+            // ✅ Payment Method Wise Totals (from TransactionPayments)
+            $payment_method_payments = (clone $paymentQuery)
                 ->select('transaction_payments.method', DB::raw('SUM(transaction_payments.amount) as total'))
                 ->groupBy('transaction_payments.method')
                 ->pluck('total', 'method')
                 ->toArray();
 
-            // ✅ Customer Wise Totals
-            $customer_payments = (clone $query)
-                ->select('c.name as customer_name', DB::raw('SUM(transaction_payments.amount) as total'))
+            // ✅ Customer Credit/Due Totals (from Transactions)
+            $customer_payments = (clone $customerQuery)
+                ->select('c.name as customer_name', DB::raw('SUM(transactions.final_total   ) as total_due'))
                 ->groupBy('c.id', 'c.name')
-                ->pluck('total', 'customer_name')
+                ->pluck('total_due', 'customer_name')
                 ->toArray();
+
             return [
-                'payment_method_payments' => $payment_method_payments,
-                'customer_payments' => $customer_payments,
+                'payment_method_payments' => $payment_method_payments, // actual payments received
+                'customer_payments'       => $customer_payments,       // remaining due per customer
             ];
         }
 
@@ -247,6 +258,7 @@ class ReportController extends Controller
         return view('report.credit_sale_payment_report')
             ->with(compact('business_locations'));
     }
+
 
     public function getCustomerSaleLedgerReport(Request $request)
     {
@@ -2856,7 +2868,7 @@ class ReportController extends Controller
                     'transaction_payments.document',
                     'transaction_payments.transaction_no',
                     't.invoice_no',
-                    'c.id as customer_id',
+                    'c.contact_id as customer_id',
                     'c.pep_type as pep_type',
                     'c.risk_rating as risk_rating',
                     't.id as transaction_id',
