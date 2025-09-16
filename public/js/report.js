@@ -1600,7 +1600,7 @@ $(document).ready(function () {
                 d.customer_group_id = $('select#customer_group_filter').val();
                 var start = '';
                 var end = '';
-                if ($('input#acr_date_filter').val()) {
+                if ($('input#spr_date_filter').val()) {
                     start = $('input#spr_date_filter')
                         .data('daterangepicker')
                         .startDate.format('YYYY-MM-DD');
