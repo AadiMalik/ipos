@@ -946,6 +946,7 @@ $(document).ready(function () {
     }
     $(
         '#product_stock_movement_report_form #category_id, \
+        #product_stock_movement_report_form #balance_status, \
         #product_stock_movement_report_form #location_id'
     ).change(function () {
         product_stock_movement_report.ajax.reload();
@@ -972,6 +973,7 @@ $(document).ready(function () {
                 d.end_date = end;
                 d.category_id = $('#category_id').val();
                 d.location_id = $('select#location_id').val();
+                d.balance_status = $('#balance_status').val();
             },
         },
         columns: [

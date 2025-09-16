@@ -1938,13 +1938,17 @@ class ProductUtil extends Util
             ->leftJoin('variation_location_details as vld', 'variations.id', '=', 'vld.variation_id')
             ->where('p.business_id', $business_id);
 
+        // ✅ Location filter
         if (!empty($filters['location_id'])) {
             $query->where('vld.location_id', $filters['location_id']);
         }
+
+        // ✅ Category filter
         if (!empty($filters['category_id'])) {
             $query->where('p.category_id', $filters['category_id']);
         }
 
+        // ✅ Date filters
         $start_date = !empty($filters['start_date']) ? $filters['start_date'] : null;
         $end_date   = !empty($filters['end_date']) ? $filters['end_date'] : null;
 
@@ -1953,7 +1957,7 @@ class ProductUtil extends Util
         $opening_condition_purchase = '';
         $opening_condition_sale = '';
 
-        if ($start_date) {
+        if ($start_date && $end_date) {
             $opening_condition_purchase = "AND t.transaction_date < '$start_date'";
             $opening_condition_sale     = "AND t.transaction_date < '$start_date'";
 
@@ -1961,12 +1965,35 @@ class ProductUtil extends Util
             $date_condition_sale     = "AND t.transaction_date BETWEEN '$start_date' AND '$end_date'";
         }
 
+        // ✅ Balance formula ek hi jagah
+        $balance_formula = "(
+        (COALESCE((SELECT SUM(pl.quantity) 
+            FROM purchase_lines pl
+            JOIN transactions t ON pl.transaction_id=t.id
+            WHERE pl.variation_id=variations.id $opening_condition_purchase),0)
+        -
+        COALESCE((SELECT SUM(tsl.quantity) 
+            FROM transaction_sell_lines tsl
+            JOIN transactions t ON tsl.transaction_id=t.id
+            WHERE tsl.variation_id=variations.id AND t.type='sell' AND t.status='final' $opening_condition_sale),0))
+        +
+        COALESCE((SELECT SUM(pl.quantity) 
+            FROM purchase_lines pl
+            JOIN transactions t ON pl.transaction_id=t.id
+            WHERE pl.variation_id=variations.id $date_condition_purchase),0)
+        -
+        COALESCE((SELECT SUM(tsl.quantity) 
+            FROM transaction_sell_lines tsl
+            JOIN transactions t ON tsl.transaction_id=t.id
+            WHERE tsl.variation_id=variations.id AND t.type='sell' AND t.status='final' $date_condition_sale),0)
+    )";
+
         $products = $query->select(
             'p.name as product',
             'c.name as category_name',
             'variations.sub_sku as product_ref',
 
-            // Opening Stock
+            // ✅ Opening Stock
             DB::raw("(COALESCE((SELECT SUM(pl.quantity) 
                   FROM purchase_lines pl
                   JOIN transactions t ON pl.transaction_id=t.id
@@ -1979,48 +2006,38 @@ class ProductUtil extends Util
                   AND t.type='sell' AND t.status='final' $opening_condition_sale),0)
         ) as opening_stock"),
 
-            // Purchase Stock
+            // ✅ Purchase Stock
             DB::raw("(SELECT SUM(pl.quantity) 
                   FROM purchase_lines pl
                   JOIN transactions t ON pl.transaction_id=t.id
                   WHERE pl.variation_id=variations.id $date_condition_purchase) as purchase_stock"),
 
-            // Sold Stock
+            // ✅ Sold Stock
             DB::raw("(SELECT SUM(tsl.quantity) 
                   FROM transaction_sell_lines tsl
                   JOIN transactions t ON tsl.transaction_id=t.id
                   WHERE tsl.variation_id=variations.id 
                   AND t.type='sell' AND t.status='final' $date_condition_sale) as sold_stock"),
 
-            // Balance Stock
-            DB::raw("(
-            (COALESCE((SELECT SUM(pl.quantity) 
-              FROM purchase_lines pl
-              JOIN transactions t ON pl.transaction_id=t.id
-              WHERE pl.variation_id=variations.id $opening_condition_purchase),0)
-            -
-            COALESCE((SELECT SUM(tsl.quantity) 
-              FROM transaction_sell_lines tsl
-              JOIN transactions t ON tsl.transaction_id=t.id
-              WHERE tsl.variation_id=variations.id 
-              AND t.type='sell' AND t.status='final' $opening_condition_sale),0))
-            +
-            COALESCE((SELECT SUM(pl.quantity) 
-              FROM purchase_lines pl
-              JOIN transactions t ON pl.transaction_id=t.id
-              WHERE pl.variation_id=variations.id $date_condition_purchase),0)
-            -
-            COALESCE((SELECT SUM(tsl.quantity) 
-              FROM transaction_sell_lines tsl
-              JOIN transactions t ON tsl.transaction_id=t.id
-              WHERE tsl.variation_id=variations.id 
-              AND t.type='sell' AND t.status='final' $date_condition_sale),0)
-        ) as balance_stock")
+            // ✅ Balance Stock
+            DB::raw("$balance_formula as balance_stock")
         )
             ->groupBy('variations.id');
 
+        // ✅ Balance Status filter
+        if (!empty($filters['balance_status'])) {
+            if ($filters['balance_status'] == 'negative') {
+                $query->havingRaw("$balance_formula < 0");
+            } elseif ($filters['balance_status'] == 'positive') {
+                $query->havingRaw("$balance_formula > 0");
+            } elseif ($filters['balance_status'] == 'zero') {
+                $query->havingRaw("$balance_formula = 0");
+            }
+        }
+
         return $products;
     }
+
 
 
     /**

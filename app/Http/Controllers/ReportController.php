@@ -783,7 +783,7 @@ class ReportController extends Controller
         $business_id = $request->session()->get('user.business_id');
 
         if ($request->ajax()) {
-            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id']);
+            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id','balance_status']);
 
             // call util function jo maine pehle banaya tha
             $products = $this->productUtil->getProductStockMovementReport($business_id, $filters);
