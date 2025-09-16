@@ -894,6 +894,7 @@ $(document).ready(function () {
     }
     $(
         '#product_valuation_report_form #category_id, \
+        #product_valuation_report_form #brand_id, \
         #product_valuation_report_form #location_id'
     ).change(function () {
         product_valuation_report.ajax.reload();
@@ -919,11 +920,14 @@ $(document).ready(function () {
                 d.start_date = start;
                 d.end_date = end;
                 d.category_id = $('#category_id').val();
+                d.brand_id = $('#brand_id').val();
                 d.location_id = $('select#location_id').val();
             },
         },
         columns: [
             { data: 'category_name', name: 'category_name', searchable: false },
+            { data: 'brand_name', name: 'brand_name', searchable: false },
+            { data: 'product_sku', name: 'product_sku', searchable: false },
             { data: 'product', name: 'product', searchable: false },
             { data: 'purchase_price', name: 'purchase_price', searchable: false },
             { data: 'sale_price', name: 'sale_price', searchable: false },

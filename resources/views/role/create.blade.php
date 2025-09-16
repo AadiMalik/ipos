@@ -1450,7 +1450,7 @@
             <div class="checkbox">
               <label>
                 {!! Form::checkbox('permissions[]', 'product_valuation_report.view', false, 
-                [ 'class' => 'input-icheck']); !!} View product valuation report
+                [ 'class' => 'input-icheck']); !!} View price list report
               </label>
             </div>
           </div>

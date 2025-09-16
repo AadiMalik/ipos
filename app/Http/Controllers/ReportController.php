@@ -742,7 +742,7 @@ class ReportController extends Controller
         $business_id = $request->session()->get('user.business_id');
 
         if ($request->ajax()) {
-            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id']);
+            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id','brand_id']);
 
             $products = $this->productUtil->getProductValuationDetails($business_id, $filters);
 
@@ -768,9 +768,10 @@ class ReportController extends Controller
 
         $categories = Category::forDropdown($business_id, 'product');
         $business_locations = BusinessLocation::forDropdown($business_id, true);
+        $brands = Brands::forDropdown($business_id);
 
         return view('report.product_valuation_report')
-            ->with(compact('categories', 'business_locations'));
+            ->with(compact('categories', 'business_locations','brands'));
     }
 
     // product stock movement report

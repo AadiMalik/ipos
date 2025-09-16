@@ -753,7 +753,7 @@ class AdminSidebarMenu
                         if (auth()->user()->can('product_valuation_report.view')) {
                             $sub->url(
                                 action([\App\Http\Controllers\ReportController::class, 'getProductValuationReport']),
-                                'Product Valuation Report',
+                                'Price List Report',
                                 ['icon' => '', 'active' => request()->segment(2) == 'product-valuation-report']
                             );
                         }

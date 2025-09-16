@@ -1881,12 +1881,17 @@ class ProductUtil extends Util
     {
         $query = Variation::join('products as p', 'p.id', '=', 'variations.product_id')
             ->leftJoin('categories as c', 'p.category_id', '=', 'c.id')
+            ->leftJoin('brands as b', 'p.brand_id', '=', 'b.id')
             ->leftJoin('variation_location_details as vld', 'variations.id', '=', 'vld.variation_id')
             ->where('p.business_id', $business_id);
 
         // Location Filter
         if (!empty($filters['location_id'])) {
             $query->where('vld.location_id', $filters['location_id']);
+        }
+        // brand filter
+        if (!empty($filters['brand_id'])) {
+            $query->where('p.brand_id', $filters['brand_id']);
         }
 
         // Date Filter
@@ -1904,6 +1909,8 @@ class ProductUtil extends Util
 
         $products = $query->select(
             'p.name as product',
+            'p.sku as product_sku',
+            'b.name as brand_name',
             'c.name as category_name',
             'variations.id as variation_id',
             'variations.sell_price_inc_tax as sale_price',
