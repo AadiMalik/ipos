@@ -49,6 +49,7 @@
                                 <th>Agent Name</th>
                                 <th>Agent Email</th>
                                 <th>Agent Contact</th>
+                                <th>Total Sale (Before Tax)</th>
                                 <th>Total Sale</th>
                                 <th>Individual Commission</th>
                                 <th>Global Commission</th>
@@ -57,6 +58,7 @@
                         <tfoot>
                             <tr class="bg-gray font-17 footer-total text-center">
                                 <td colspan="4"><strong>Total:</strong></td>
+                                <td><span class="display_currency" id="footer_total_before_tax" data-currency_symbol ="true"></span></td>
                                 <td><span class="display_currency" id="footer_total_sale" data-currency_symbol ="true"></span></td>
                                 <td><span class="display_currency" id="footer_total_individual" data-currency_symbol ="true"></span></td>
                                 <td><span class="display_currency" id="footer_total_global" data-currency_symbol ="true"></span></td>

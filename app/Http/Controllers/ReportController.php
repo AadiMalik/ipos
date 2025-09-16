@@ -290,6 +290,17 @@ class ReportController extends Controller
             )
                 ->groupBy('c.id', 'c.name');
 
+            // ✅ Balance Status filter
+            if (! empty($request->balance_status)) {
+                if ($request->balance_status === 'positive') {
+                    $customers->havingRaw('balance_due > 0');
+                } elseif ($request->balance_status === 'negative') {
+                    $customers->havingRaw('balance_due < 0');
+                } elseif ($request->balance_status === 'zero') {
+                    $customers->havingRaw('balance_due = 0');
+                }
+            }
+
             return DataTables::of($customers)
                 ->addIndexColumn() // ✅ Sr. number
                 ->editColumn('total_sales', function ($row) {
@@ -742,7 +753,7 @@ class ReportController extends Controller
         $business_id = $request->session()->get('user.business_id');
 
         if ($request->ajax()) {
-            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id','brand_id']);
+            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id', 'brand_id']);
 
             $products = $this->productUtil->getProductValuationDetails($business_id, $filters);
 
@@ -771,7 +782,7 @@ class ReportController extends Controller
         $brands = Brands::forDropdown($business_id);
 
         return view('report.product_valuation_report')
-            ->with(compact('categories', 'business_locations','brands'));
+            ->with(compact('categories', 'business_locations', 'brands'));
     }
 
     // product stock movement report
@@ -784,7 +795,7 @@ class ReportController extends Controller
         $business_id = $request->session()->get('user.business_id');
 
         if ($request->ajax()) {
-            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id','balance_status']);
+            $filters = $request->only(['location_id', 'start_date', 'end_date', 'category_id', 'balance_status']);
 
             // call util function jo maine pehle banaya tha
             $products = $this->productUtil->getProductStockMovementReport($business_id, $filters);
@@ -2970,17 +2981,19 @@ class ReportController extends Controller
 
             $data = [];
             foreach ($commission_agent as $item) {
+                $total_before_tax = $transactions->where('commission_agent', $item->id)->sum('total_before_tax');
                 $total_sale = $transactions->where('commission_agent', $item->id)->sum('final_total');
-                $individual_comission = $total_sale  * ($item->cmmsn_percent / 100);
+                $individual_comission = $total_before_tax  * ($item->cmmsn_percent / 100);
                 $global_commission = 0;
-                if ($total_sale > 800000) {
-                    $global_commission = $total_sale  * ($item->global_commission / 100);
+                if ($total_before_tax > 800000) {
+                    $global_commission = $total_before_tax  * ($item->global_commission / 100);
                 }
                 $data[] = [
                     "agent_name" => $item->surname . ' ' . $item->first_name . ' ' . $item->last_name,
                     "agent_email" => $item->email ?? 'N/A',
                     "agent_contact_no" => $item->contact_no ?? 'N/A',
-                    "total_sale" => $total_sale ?? 0,
+                    "total_before_tax" => round($total_before_tax, 2) ?? 0,
+                    "total_sale" => round($total_sale, 2) ?? 0,
                     "individual_commission" => round($individual_comission, 2),
                     "global_commission" => round($global_commission, 2)
                 ];

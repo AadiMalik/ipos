@@ -1005,7 +1005,8 @@ $(document).ready(function () {
         });
     }
     $(
-        '#customer_sale_ledger_report_form #location_id'
+        '#customer_sale_ledger_report_form #balance_csl_status, \
+        #customer_sale_ledger_report_form #location_id'
     ).change(function () {
         customer_sale_ledger_report.ajax.reload();
     });
@@ -1030,6 +1031,7 @@ $(document).ready(function () {
                 d.start_date = start;
                 d.end_date = end;
                 d.location_id = $('select#location_id').val();
+                d.balance_status = $('select#balance_csl_status').val();
             },
         },
         columns: [
@@ -1536,6 +1538,7 @@ $(document).ready(function () {
             url: '/reports/agent-commission-report',
             data: function (d) {
                 d.location_id = $('select#location_id').val();
+                d.balance_status = $('select#balance_status').val();
                 var start = '';
                 var end = '';
                 if ($('input#acr_date_filter').val()) {
@@ -1561,6 +1564,7 @@ $(document).ready(function () {
             { data: 'agent_name', name: 'agent_name' },
             { data: 'agent_email', name: 'agent_email' },
             { data: 'agent_contact_no', name: 'agent_contact_no' },
+            { data: 'total_before_tax', name: 'total_before_tax' },
             { data: 'total_sale', name: 'total_sale' },
             { data: 'individual_commission', name: 'individual_commission' },
             { data: 'global_commission', name: 'global_commission' },
@@ -1569,19 +1573,24 @@ $(document).ready(function () {
             var api = this.api();
 
             // sum specific columns by index
-            var total_sale = api.column(4, { page: 'current' }).data().reduce(function (a, b) {
+            var total_before_tax = api.column(4, { page: 'current' }).data().reduce(function (a, b) {
                 return parseFloat(a) + parseFloat(b);
             }, 0);
 
-            var total_individual = api.column(5, { page: 'current' }).data().reduce(function (a, b) {
+            var total_sale = api.column(5, { page: 'current' }).data().reduce(function (a, b) {
                 return parseFloat(a) + parseFloat(b);
             }, 0);
 
-            var total_global = api.column(6, { page: 'current' }).data().reduce(function (a, b) {
+            var total_individual = api.column(6, { page: 'current' }).data().reduce(function (a, b) {
+                return parseFloat(a) + parseFloat(b);
+            }, 0);
+
+            var total_global = api.column(7, { page: 'current' }).data().reduce(function (a, b) {
                 return parseFloat(a) + parseFloat(b);
             }, 0);
 
             // update footer
+            $('#footer_total_before_tax').text(total_before_tax.toFixed(2));
             $('#footer_total_sale').text(total_sale.toFixed(2));
             $('#footer_total_individual').text(total_individual.toFixed(2));
             $('#footer_total_global').text(total_global.toFixed(2));
