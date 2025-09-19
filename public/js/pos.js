@@ -1895,7 +1895,7 @@ function pos_discount(total_amount) {
 
     $('span#total_discount').text(__currency_trans_from_en(discount, false));
 
-    return discount/1.15;
+    return discount;
 }
 
 function pos_order_tax(price_total, discount) {
@@ -2626,7 +2626,7 @@ function validate_discount_field() {
             normalizer: function (value) {
                 // convert input to number and divide by 1.15 before validation
                 let num = __read_number($(this));
-                return num / 1.15;
+                return num;
             },
             messages: {
                 'max-value': discount_element.data('max-discount-error_msg'),
