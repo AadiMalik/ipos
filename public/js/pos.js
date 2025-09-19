@@ -867,7 +867,7 @@ $(document).ready(function () {
 
         // Get entered discount and divide by 1.15
         let entered_discount = __read_number($('input#discount_amount_modal'));
-        let final_discount = entered_discount / 1.15;
+        let final_discount = entered_discount;
 
         // Update discount type and amount
         $('input#discount_type').val($('select#discount_type_modal').val());
@@ -1820,7 +1820,7 @@ function calculate_billing_details(price_total) {
         }
     }
 
-    var order_tax = pos_order_tax(price_total, discount);
+    var order_tax = pos_order_tax(price_total);
 
     // Add shipping charges
     var shipping_charges = __read_number($('input#shipping_charges'));
@@ -1850,7 +1850,7 @@ function calculate_billing_details(price_total) {
     }
 
     // Calculate final total
-    var total_payable = price_total - discount + order_tax + shipping_charges + packing_charge + additional_expense;
+    var total_payable = (price_total + order_tax + shipping_charges + packing_charge + additional_expense)  - discount;
 
     var rounding_multiple = $('#amount_rounding_method').val() ? parseFloat($('#amount_rounding_method').val()) : 0;
     var round_off_data = __round(total_payable, rounding_multiple);
@@ -1902,7 +1902,7 @@ function pos_order_tax(price_total, discount) {
     var tax_rate_id = $('#tax_rate_id').val();
     var calculation_type = 'percentage';
     var calculation_amount = __read_number($('#tax_calculation_amount'));
-    var total_amount = price_total - discount;
+    var total_amount = price_total;
 
     if (tax_rate_id) {
         var order_tax = __calculate_amount(calculation_type, calculation_amount, total_amount);
