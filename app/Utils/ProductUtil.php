@@ -675,7 +675,7 @@ class ProductUtil extends Util
             $tax_details = TaxRate::find($tax_id);
             if (! empty($tax_details)) {
                 $output['tax_id'] = $tax_id;
-                $output['tax'] = ($tax_details->amount / 100) * ($output['total_before_tax'] - $output['discount']);
+                $output['tax'] = ($tax_details->amount / 100) * ($output['total_before_tax']);
             }
         }
 
