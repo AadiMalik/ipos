@@ -1918,7 +1918,7 @@ function updateCreditSalePayment() {
             $('#customer_payment_table tbody').empty();
 
             var pm_total = 0;
-            $.each(data.payment_method_payments, function (method, amount) {
+            $.each(data.payment_method_due, function (method, amount) {
                 $('#payment_method_table tbody').append(
                     '<tr><td>' + method + '</td><td class="text-right">' + __currency_trans_from_en(amount, true) + '</td></tr>'
                 );
@@ -1927,7 +1927,7 @@ function updateCreditSalePayment() {
             $('#payment_method_total').text(__currency_trans_from_en(pm_total, true));
 
             var c_total = 0;
-            $.each(data.customer_payments, function (customer, amount) {
+            $.each(data.customer_due, function (customer, amount) {
                 $('#customer_payment_table tbody').append(
                     '<tr><td>' + customer + '</td><td class="text-right">' + __currency_trans_from_en(amount, true) + '</td></tr>'
                 );

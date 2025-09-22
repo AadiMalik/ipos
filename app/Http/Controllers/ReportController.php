@@ -198,62 +198,91 @@ class ReportController extends Controller
 
         if ($request->ajax()) {
             $location_id = $request->get('location_id', null);
-
-            // Base query for Transaction Payments (for received payments)
-            $paymentQuery = TransactionPayment::leftJoin('transactions as t', function ($join) use ($business_id) {
-                $join->on('transaction_payments.transaction_id', '=', 't.id')
-                    ->where('t.business_id', $business_id)
-                    ->where('t.type', 'sell');
-            })
-                ->where('transaction_payments.business_id', $business_id);
-
-            // Base query for Transactions (for customer credit/due)
-            $customerQuery = Transaction::leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
+        
+            // -------------------------------
+            // ✅ Base Query (Transactions + Customers)
+            // -------------------------------
+            $baseQuery = Transaction::leftJoin('contacts as c', 'transactions.contact_id', '=', 'c.id')
                 ->where('transactions.business_id', $business_id)
                 ->where('transactions.type', 'sell')
-                ->where('transactions.status', 'final') // ✅ only final sales
-                ->where('transactions.payment_status', 'due'); // ✅ only due
-
+                ->where('transactions.status', 'final'); // sirf final sales
+        
             // ✅ Date filter
             $start_date = $request->get('start_date');
             $end_date = $request->get('end_date');
             if (! empty($start_date) && ! empty($end_date)) {
-                $paymentQuery->whereBetween(DB::raw('date(paid_on)'), [$start_date, $end_date]);
-                $customerQuery->whereBetween(DB::raw('date(transaction_date)'), [$start_date, $end_date]);
+                $baseQuery->whereBetween(DB::raw('date(transactions.transaction_date)'), [$start_date, $end_date]);
             }
-
+        
             // ✅ Location filter
             $permitted_locations = auth()->user()->permitted_locations();
             if ($permitted_locations != 'all') {
-                $paymentQuery->whereIn('t.location_id', $permitted_locations);
-                $customerQuery->whereIn('transactions.location_id', $permitted_locations);
+                $baseQuery->whereIn('transactions.location_id', $permitted_locations);
             }
             if (! empty($location_id)) {
-                $paymentQuery->where('t.location_id', $location_id);
-                $customerQuery->where('transactions.location_id', $location_id);
+                $baseQuery->where('transactions.location_id', $location_id);
             }
-
-            // ✅ Payment Method Wise Totals (from TransactionPayments)
-            $payment_method_payments = (clone $paymentQuery)
-                ->select('transaction_payments.method', DB::raw('SUM(transaction_payments.amount) as total'))
-                ->groupBy('transaction_payments.method')
-                ->pluck('total', 'method')
-                ->toArray();
-
-            // ✅ Customer Credit/Due Totals (from Transactions)
-            $customer_payments = (clone $customerQuery)
-                ->select('c.name as customer_name', DB::raw('SUM(transactions.final_total   ) as total_due'))
+        
+            // -------------------------------
+            // ✅ 1. Customer Wise Remaining Balance
+            // -------------------------------
+            $customer_due = (clone $baseQuery)
+                ->select(
+                    'c.name as customer_name',
+                    DB::raw('SUM(transactions.final_total) as total_sales'),
+                    DB::raw('COALESCE(SUM((SELECT SUM(tp.amount) 
+                                            FROM transaction_payments tp 
+                                            WHERE tp.transaction_id = transactions.id)),0) as total_paid'),
+                    DB::raw('(SUM(transactions.final_total) - 
+                             COALESCE(SUM((SELECT SUM(tp.amount) 
+                                           FROM transaction_payments tp 
+                                           WHERE tp.transaction_id = transactions.id)),0)) as balance_due')
+                )
                 ->groupBy('c.id', 'c.name')
-                ->pluck('total_due', 'customer_name')
+                ->havingRaw('balance_due > 0')
+                ->pluck('balance_due', 'customer_name')
                 ->toArray();
-
+        
+            // -------------------------------
+            // ✅ 2. Payment Method Wise Remaining Balance
+            // -------------------------------
+            $payment_due = TransactionPayment::leftJoin('transactions as t', 'transaction_payments.transaction_id', '=', 't.id')
+                ->where('t.business_id', $business_id)
+                ->where('t.type', 'sell')
+                ->where('t.status', 'final');
+        
+            // ✅ Date filter for payments
+            if (! empty($start_date) && ! empty($end_date)) {
+                $payment_due->whereBetween(DB::raw('date(t.transaction_date)'), [$start_date, $end_date]);
+            }
+        
+            // ✅ Location filter
+            if ($permitted_locations != 'all') {
+                $payment_due->whereIn('t.location_id', $permitted_locations);
+            }
+            if (! empty($location_id)) {
+                $payment_due->where('t.location_id', $location_id);
+            }
+        
+            $payment_method_due = $payment_due->select(
+                'transaction_payments.method',
+                DB::raw('SUM(t.final_total) - SUM(transaction_payments.amount) as remaining_balance')
+            )
+            ->groupBy('transaction_payments.method')
+            ->havingRaw('remaining_balance > 0')    
+            ->pluck('remaining_balance', 'method')
+            ->toArray();
+        
+            // -------------------------------
+            // ✅ Return Both
+            // -------------------------------
             return [
-                'payment_method_payments' => $payment_method_payments, // actual payments received
-                'customer_payments'       => $customer_payments,       // remaining due per customer
+                'payment_method_due' => $payment_method_due, // method wise due balance
+                'customer_due'       => $customer_due       // customer wise due balance
             ];
         }
-
-        $business_locations = BusinessLocation::forDropdown($business_id);
+        
+        $business_locations = BusinessLocation::forDropdown($business_id);        
 
         return view('report.credit_sale_payment_report')
             ->with(compact('business_locations'));
