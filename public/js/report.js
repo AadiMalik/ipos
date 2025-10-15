@@ -189,11 +189,11 @@ $(document).ready(function () {
             $('#product_stock_date_filter span').val(
                 start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
             );
-            sell_payment_report.ajax.reload();
+            stock_report_table.ajax.reload();
         });
         $('#product_stock_date_filter').on('cancel.daterangepicker', function (ev, picker) {
             $('#product_stock_date_filter').val('');
-            sell_payment_report.ajax.reload();
+            stock_report_table.ajax.reload();
         });
     }
 
