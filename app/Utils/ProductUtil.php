@@ -21,6 +21,7 @@ use App\VariationLocationDetails;
 use App\VariationTemplate;
 use App\VariationValueTemplate;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class ProductUtil extends Util
 {
@@ -1813,12 +1814,11 @@ class ProductUtil extends Util
             $location_filter = 'AND transactions.location_id=l.id';
         }
 
+        $date_filter = '';
         if (!empty($filters['start_date']) && !empty($filters['end_date'])) {
-            $start_date = $filters['start_date'];
-            $end_date = $filters['end_date'];
-        
-            // Apply date range to related subqueries
-            $date_filter = " AND DATE(transactions.transaction_date) BETWEEN '$start_date' AND '$end_date' ";
+            $start_date = Carbon::parse($filters['start_date'])->format('Y-m-d');
+            $end_date = Carbon::parse($filters['end_date'])->format('Y-m-d');
+            $date_filter = " AND DATE(transactions.transaction_date) BETWEEN '$start_date' AND '$end_date'";
         } else {
             $date_filter = '';
         }
