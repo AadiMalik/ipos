@@ -621,6 +621,8 @@ class ReportController extends Controller
         }
         if ($request->ajax()) {
             $filters = request()->only([
+                'start_date',
+                'end_date',
                 'location_id',
                 'category_id',
                 'sub_category_id',

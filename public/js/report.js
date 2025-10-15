@@ -184,6 +184,19 @@ $(document).ready(function () {
     stock_report_cols.push({ data: 'product_custom_field3', name: 'p.product_custom_field3' });
     stock_report_cols.push({ data: 'product_custom_field4', name: 'p.product_custom_field4' });
 
+    if ($('#product_stock_date_filter').length == 1) {
+        $('#product_stock_date_filter').daterangepicker(dateRangeSettings, function (start, end) {
+            $('#product_stock_date_filter span').val(
+                start.format(moment_date_format) + ' ~ ' + end.format(moment_date_format)
+            );
+            sell_payment_report.ajax.reload();
+        });
+        $('#product_stock_date_filter').on('cancel.daterangepicker', function (ev, picker) {
+            $('#product_stock_date_filter').val('');
+            sell_payment_report.ajax.reload();
+        });
+    }
+
     if ($('th.current_stock_mfg').length) {
         stock_report_cols.push({ data: 'total_mfg_stock', name: 'total_mfg_stock', searchable: false });
     }
@@ -203,6 +216,18 @@ $(document).ready(function () {
                 d.sub_category_id = $('#sub_category_id').val();
                 d.brand_id = $('#brand').val();
                 d.unit_id = $('#unit').val();
+                var start = '';
+                var end = '';
+                if ($('input#product_stock_date_filter').val()) {
+                    start = $('input#product_stock_date_filter')
+                        .data('daterangepicker')
+                        .startDate.format('YYYY-MM-DD');
+                    end = $('input#product_stock_date_filter')
+                        .data('daterangepicker')
+                        .endDate.format('YYYY-MM-DD');
+                }
+                d.start_date = start;
+                d.end_date = end;
 
                 d.only_mfg_products = $('#only_mfg_products').length && $('#only_mfg_products').is(':checked') ? 1 : 0;
             },

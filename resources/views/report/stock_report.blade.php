@@ -44,6 +44,12 @@
                         {!! Form::select('unit', $units, null, ['placeholder' => __('messages.all'), 'class' => 'form-control select2', 'style' => 'width:100%']); !!}
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        {!! Form::label('product_stock_date_filter', __('report.date_range') . ':') !!}
+                        {!! Form::text('date_range', null, ['placeholder' => __('lang_v1.select_a_date_range'), 'class' => 'form-control', 'id' => 'product_stock_date_filter', 'readonly']); !!}
+                    </div>
+                </div>
                 @if($show_manufacturing_data)
                     <div class="col-md-3">
                         <div class="form-group">
