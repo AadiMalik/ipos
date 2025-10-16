@@ -67,7 +67,7 @@ class Util
             $currency_precision = ! empty($business_details) ? $business_details->quantity_precision : session('business.quantity_precision', 2);
         }
 
-        $formatted = number_format((float)$input_number, (float)$currency_precision, (float)$decimal_separator, (float)$thousand_separator);
+        $formatted = number_format($input_number, $currency_precision, $decimal_separator, $thousand_separator);
 
         if ($add_symbol) {
             $currency_symbol_placement = ! empty($business_details) ? $business_details->currency_symbol_placement : session('business.currency_symbol_placement');
