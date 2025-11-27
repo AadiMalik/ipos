@@ -430,6 +430,16 @@ class BusinessUtil extends Util
     }
 
     /**
+     * Return the default setting for the whatsapp.
+     *
+     * @return array
+     */
+    public function defaultWhatsappSettings()
+    {
+        return ['instance_id' => '', 'api_token' => ''];
+    }
+
+    /**
      * Return the default setting for the email.
      *
      * @return array

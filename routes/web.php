@@ -123,6 +123,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/calendar', [HomeController::class, 'getCalendar'])->name('calendar');
 
     Route::post('/test-email', [BusinessController::class, 'testEmailConfiguration']);
+    Route::post('/test-whatsapp', [BusinessController::class, 'testWhatsAppConfiguration']);
     Route::post('/test-sms', [BusinessController::class, 'testSmsConfiguration']);
     Route::get('/business/settings', [BusinessController::class, 'getBusinessSettings'])->name('business.getBusinessSettings');
     Route::post('/business/update', [BusinessController::class, 'postBusinessSettings'])->name('business.postBusinessSettings');
@@ -200,6 +201,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::get('/sells/convert-to-proforma/{id}', 'SellPosController@convertToProforma');
     Route::get('/sells/quotations', 'SellController@getQuotations');
     Route::get('/sells/draft-dt', 'SellController@getDraftDatables');
+    Route::post('/sells/send-invoice-whatsapp', [SellController::class, 'sendInvoiceWhatsapp']);
     Route::resource('sells', 'SellController')->except(['show']);
     Route::get('/sells/copy-quotation/{id}', [SellPosController::class, 'copyQuotation']);
 

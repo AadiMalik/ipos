@@ -55,8 +55,22 @@ class SellController extends Controller
         $this->moduleUtil = $moduleUtil;
         $this->productUtil = $productUtil;
 
-        $this->dummyPaymentLine = ['method' => '', 'amount' => 0, 'note' => '', 'card_transaction_number' => '', 'card_number' => '', 'card_type' => '', 'card_holder_name' => '', 'card_month' => '', 'card_year' => '', 'card_security' => '', 'cheque_number' => '', 'bank_account_number' => '',
-            'is_return' => 0, 'transaction_no' => '', ];
+        $this->dummyPaymentLine = [
+            'method' => '',
+            'amount' => 0,
+            'note' => '',
+            'card_transaction_number' => '',
+            'card_number' => '',
+            'card_type' => '',
+            'card_holder_name' => '',
+            'card_month' => '',
+            'card_year' => '',
+            'card_security' => '',
+            'cheque_number' => '',
+            'bank_account_number' => '',
+            'is_return' => 0,
+            'transaction_no' => '',
+        ];
 
         $this->shipping_status_colors = [
             'ordered' => 'bg-yellow',
@@ -81,6 +95,8 @@ class SellController extends Controller
         }
 
         $business_id = request()->session()->get('user.business_id');
+        $business = Business::find($business_id);
+        $enable_whatsapp = $business->enable_whatsapp;
         $is_woocommerce = $this->moduleUtil->isModuleInstalled('Woocommerce');
         $is_crm = $this->moduleUtil->isModuleInstalled('Crm');
         $is_tables_enabled = $this->transactionUtil->isModuleEnabled('tables');
@@ -154,9 +170,9 @@ class SellController extends Controller
                     if (auth()->user()->can('view_overdue_sells_only')) {
                         $sells->where(function ($q) use ($payment_status_arr) {
                             $q->whereIn('transactions.payment_status', $payment_status_arr)
-                            ->orWhere(function ($qr) {
-                                $qr->OverDue();
-                            });
+                                ->orWhere(function ($qr) {
+                                    $qr->OverDue();
+                                });
                         });
                     } else {
                         $sells->whereIn('transactions.payment_status', $payment_status_arr);
@@ -184,7 +200,7 @@ class SellController extends Controller
             if (! empty(request()->input('rewards_only')) && request()->input('rewards_only') == true) {
                 $sells->where(function ($q) {
                     $q->whereNotNull('transactions.rp_earned')
-                    ->orWhere('transactions.rp_redeemed', '>', 0);
+                        ->orWhere('transactions.rp_redeemed', '>', 0);
                 });
             }
 
@@ -196,7 +212,7 @@ class SellController extends Controller
                 $start = request()->start_date;
                 $end = request()->end_date;
                 $sells->whereDate('transactions.transaction_date', '>=', $start)
-                            ->whereDate('transactions.transaction_date', '<=', $end);
+                    ->whereDate('transactions.transaction_date', '<=', $end);
             }
 
             //Check is_direct sell
@@ -271,7 +287,7 @@ class SellController extends Controller
             $only_pending_shipments = request()->only_pending_shipments == 'true' ? true : false;
             if ($only_pending_shipments) {
                 $sells->where('transactions.shipping_status', '!=', 'delivered')
-                        ->whereNotNull('transactions.shipping_status');
+                    ->whereNotNull('transactions.shipping_status');
                 $only_shipments = true;
             }
 
@@ -315,15 +331,15 @@ class SellController extends Controller
                 }
 
                 $sales = $sells->where('transactions.is_suspend', 1)
-                            ->with($with)
-                            ->addSelect('transactions.is_suspend', 'transactions.res_table_id', 'transactions.res_waiter_id', 'transactions.additional_notes')
-                            ->get();
+                    ->with($with)
+                    ->addSelect('transactions.is_suspend', 'transactions.res_table_id', 'transactions.res_waiter_id', 'transactions.additional_notes')
+                    ->get();
 
                 return view('sale_pos.partials.suspended_sales_modal')->with(compact('sales', 'is_tables_enabled', 'is_service_staff_enabled', 'transaction_sub_type'));
             }
 
             $with[] = 'payment_lines';
-            
+
             if (!empty($with)) {
                 foreach ($with as $relation) {
                     if ($relation == 'payment_lines' && !empty(request()->input('payment_method'))) {
@@ -344,35 +360,35 @@ class SellController extends Controller
             $datatable = Datatables::of($sells)
                 ->addColumn(
                     'action',
-                    function ($row) use ($only_shipments, $is_admin, $sale_type) {
+                    function ($row) use ($only_shipments, $is_admin, $sale_type, $enable_whatsapp) {
                         $html = '<div class="btn-group">
                                     <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max dropdown-toggle" 
-                                        data-toggle="dropdown" aria-expanded="false">'.
-                                        __('messages.actions').
-                                        '<span class="caret"></span><span class="sr-only">Toggle Dropdown
+                                        data-toggle="dropdown" aria-expanded="false">' .
+                            __('messages.actions') .
+                            '<span class="caret"></span><span class="sr-only">Toggle Dropdown
                                         </span>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-left" role="menu">';
 
                         if (auth()->user()->can('sell.view') || auth()->user()->can('direct_sell.view') || auth()->user()->can('view_own_sell_only')) {
-                            $html .= '<li><a href="#" data-href="'.action([\App\Http\Controllers\SellController::class, 'show'], [$row->id]).'" class="btn-modal" data-container=".view_modal"><i class="fas fa-eye" aria-hidden="true"></i> '.__('messages.view').'</a></li>';
+                            $html .= '<li><a href="#" data-href="' . action([\App\Http\Controllers\SellController::class, 'show'], [$row->id]) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-eye" aria-hidden="true"></i> ' . __('messages.view') . '</a></li>';
                         }
                         if (! $only_shipments) {
                             if ($row->is_direct_sale == 0) {
                                 if (auth()->user()->can('sell.update')) {
-                                    $html .= '<li><a target="_blank" href="'.action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row->id]).'"><i class="fas fa-edit"></i> '.__('messages.edit').'</a></li>';
+                                    $html .= '<li><a target="_blank" href="' . action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row->id]) . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
                                 }
                             } elseif ($row->type == 'sales_order') {
                                 if (auth()->user()->can('so.update')) {
-                                    $html .= '<li><a target="_blank" href="'.action([\App\Http\Controllers\SellController::class, 'edit'], [$row->id]).'"><i class="fas fa-edit"></i> '.__('messages.edit').'</a></li>';
+                                    $html .= '<li><a target="_blank" href="' . action([\App\Http\Controllers\SellController::class, 'edit'], [$row->id]) . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
                                 }
                             } else {
                                 if (auth()->user()->can('direct_sell.update')) {
-                                    $html .= '<li><a target="_blank" href="'.action([\App\Http\Controllers\SellController::class, 'edit'], [$row->id]).'"><i class="fas fa-edit"></i> '.__('messages.edit').'</a></li>';
+                                    $html .= '<li><a target="_blank" href="' . action([\App\Http\Controllers\SellController::class, 'edit'], [$row->id]) . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
                                 }
                             }
 
-                            $delete_link = '<li><a href="'.action([\App\Http\Controllers\SellPosController::class, 'destroy'], [$row->id]).'" class="delete-sale"><i class="fas fa-trash"></i> '.__('messages.delete').'</a></li>';
+                            $delete_link = '<li><a href="' . action([\App\Http\Controllers\SellPosController::class, 'destroy'], [$row->id]) . '" class="delete-sale"><i class="fas fa-trash"></i> ' . __('messages.delete') . '</a></li>';
                             if ($row->is_direct_sale == 0) {
                                 if (auth()->user()->can('sell.delete')) {
                                     $html .= $delete_link;
@@ -389,65 +405,76 @@ class SellController extends Controller
                         }
 
                         if (config('constants.enable_download_pdf') && auth()->user()->can('print_invoice') && $sale_type != 'sales_order') {
-                            $html .= '<li><a href="'.route('sell.downloadPdf', [$row->id]).'" target="_blank"><i class="fas fa-print" aria-hidden="true"></i> '.__('lang_v1.download_pdf').'</a></li>';
+                            $html .= '<li><a href="' . route('sell.downloadPdf', [$row->id]) . '" target="_blank"><i class="fas fa-print" aria-hidden="true"></i> ' . __('lang_v1.download_pdf') . '</a></li>';
 
                             if (! empty($row->shipping_status)) {
-                                $html .= '<li><a href="'.route('packing.downloadPdf', [$row->id]).'" target="_blank"><i class="fas fa-print" aria-hidden="true"></i> '.__('lang_v1.download_paking_pdf').'</a></li>';
+                                $html .= '<li><a href="' . route('packing.downloadPdf', [$row->id]) . '" target="_blank"><i class="fas fa-print" aria-hidden="true"></i> ' . __('lang_v1.download_paking_pdf') . '</a></li>';
                             }
                         }
 
                         if (auth()->user()->can('sell.view') || auth()->user()->can('direct_sell.access')) {
                             if (! empty($row->document)) {
                                 $document_name = ! empty(explode('_', $row->document, 2)[1]) ? explode('_', $row->document, 2)[1] : $row->document;
-                                $html .= '<li><a href="'.url('uploads/documents/'.$row->document).'" download="'.$document_name.'"><i class="fas fa-download" aria-hidden="true"></i>'.__('purchase.download_document').'</a></li>';
+                                $html .= '<li><a href="' . url('uploads/documents/' . $row->document) . '" download="' . $document_name . '"><i class="fas fa-download" aria-hidden="true"></i>' . __('purchase.download_document') . '</a></li>';
                                 if (isFileImage($document_name)) {
-                                    $html .= '<li><a href="#" data-href="'.url('uploads/documents/'.$row->document).'" class="view_uploaded_document"><i class="fas fa-image" aria-hidden="true"></i>'.__('lang_v1.view_document').'</a></li>';
+                                    $html .= '<li><a href="#" data-href="' . url('uploads/documents/' . $row->document) . '" class="view_uploaded_document"><i class="fas fa-image" aria-hidden="true"></i>' . __('lang_v1.view_document') . '</a></li>';
                                 }
                             }
                         }
 
                         if ($is_admin || auth()->user()->hasAnyPermission(['access_shipping', 'access_own_shipping', 'access_commission_agent_shipping'])) {
-                            $html .= '<li><a href="#" data-href="'.action([\App\Http\Controllers\SellController::class, 'editShipping'], [$row->id]).'" class="btn-modal" data-container=".view_modal"><i class="fas fa-truck" aria-hidden="true"></i>'.__('lang_v1.edit_shipping').'</a></li>';
+                            $html .= '<li><a href="#" data-href="' . action([\App\Http\Controllers\SellController::class, 'editShipping'], [$row->id]) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-truck" aria-hidden="true"></i>' . __('lang_v1.edit_shipping') . '</a></li>';
                         }
 
                         if ($row->type == 'sell') {
                             if (auth()->user()->can('print_invoice')) {
-                                $html .= '<li><a href="#" class="print-invoice" data-href="'.route('sell.printInvoice', [$row->id]).'"><i class="fas fa-print" aria-hidden="true"></i> '.__('lang_v1.print_invoice').'</a></li>
-                                    <li><a href="#" class="print-invoice" data-href="'.route('sell.printInvoice', [$row->id]).'?package_slip=true"><i class="fas fa-file-alt" aria-hidden="true"></i> '.__('lang_v1.packing_slip').'</a></li>';
+                                $html .= '<li><a href="#" class="print-invoice" data-href="' . route('sell.printInvoice', [$row->id]) . '"><i class="fas fa-print" aria-hidden="true"></i> ' . __('lang_v1.print_invoice') . '</a></li>
+                                    <li><a href="#" class="print-invoice" data-href="' . route('sell.printInvoice', [$row->id]) . '?package_slip=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.packing_slip') . '</a></li>';
 
-                                $html .= '<li><a href="#" class="print-invoice" data-href="'.route('sell.printInvoice', [$row->id]).'?delivery_note=true"><i class="fas fa-file-alt" aria-hidden="true"></i> '.__('lang_v1.delivery_note').'</a></li>';
+                                $html .= '<li><a href="#" class="print-invoice" data-href="' . route('sell.printInvoice', [$row->id]) . '?delivery_note=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.delivery_note') . '</a></li>';
                             }
                             $html .= '<li class="divider"></li>';
                             if (! $only_shipments) {
-                                if ($row->is_direct_sale == 0 && ! auth()->user()->can('sell.update') &&
-                                auth()->user()->can('edit_pos_payment')) {
-                                    $html .= '<li><a href="'.route('edit-pos-payment', [$row->id]).'" 
-                                    ><i class="fas fa-money-bill-alt"></i> '.__('lang_v1.add_edit_payment').
-                                    '</a></li>';
+                                if (
+                                    $row->is_direct_sale == 0 && ! auth()->user()->can('sell.update') &&
+                                    auth()->user()->can('edit_pos_payment')
+                                ) {
+                                    $html .= '<li><a href="' . route('edit-pos-payment', [$row->id]) . '" 
+                                    ><i class="fas fa-money-bill-alt"></i> ' . __('lang_v1.add_edit_payment') .
+                                        '</a></li>';
                                 }
 
-                                if (auth()->user()->can('sell.payments') ||
+                                if (
+                                    auth()->user()->can('sell.payments') ||
                                     auth()->user()->can('edit_sell_payment') ||
-                                    auth()->user()->can('delete_sell_payment')) {
+                                    auth()->user()->can('delete_sell_payment')
+                                ) {
                                     if ($row->payment_status != 'paid') {
-                                        $html .= '<li><a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'addPayment'], [$row->id]).'" class="add_payment_modal"><i class="fas fa-money-bill-alt"></i> '.__('purchase.add_payment').'</a></li>';
+                                        $html .= '<li><a href="' . action([\App\Http\Controllers\TransactionPaymentController::class, 'addPayment'], [$row->id]) . '" class="add_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.add_payment') . '</a></li>';
                                     }
 
-                                    $html .= '<li><a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'show'], [$row->id]).'" class="view_payment_modal"><i class="fas fa-money-bill-alt"></i> '.__('purchase.view_payments').'</a></li>';
+                                    $html .= '<li><a href="' . action([\App\Http\Controllers\TransactionPaymentController::class, 'show'], [$row->id]) . '" class="view_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.view_payments') . '</a></li>';
                                 }
 
                                 if (auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) {
                                     // $html .= '<li><a href="' . action([\App\Http\Controllers\SellController::class, 'duplicateSell'], [$row->id]) . '"><i class="fas fa-copy"></i> ' . __("lang_v1.duplicate_sell") . '</a></li>';
 
-                                    $html .= '<li><a href="'.action([\App\Http\Controllers\SellReturnController::class, 'add'], [$row->id]).'"><i class="fas fa-undo"></i> '.__('lang_v1.sell_return').'</a></li>
+                                    $html .= '<li><a href="' . action([\App\Http\Controllers\SellReturnController::class, 'add'], [$row->id]) . '"><i class="fas fa-undo"></i> ' . __('lang_v1.sell_return') . '</a></li>
 
-                                    <li><a href="'.action([\App\Http\Controllers\SellPosController::class, 'showInvoiceUrl'], [$row->id]).'" class="view_invoice_url"><i class="fas fa-eye"></i> '.__('lang_v1.view_invoice_url').'</a></li>';
+                                    <li><a href="' . action([\App\Http\Controllers\SellPosController::class, 'showInvoiceUrl'], [$row->id]) . '" class="view_invoice_url"><i class="fas fa-eye"></i> ' . __('lang_v1.view_invoice_url') . '</a></li>';
+                                }
+                                if ($enable_whatsapp == 1 && !empty($row->mobile)) {
+                                    $html .= '<li>
+                                            <a href="#" class="send-whatsapp-invoice" data-id="' . $row->id . '" data-number="' . $row->mobile . '">
+                                            <i class="fab fa-whatsapp"></i> Send Invoice via WhatsApp
+                                            </a>
+                                        </li>';
                                 }
                             }
 
-                            $html .= '<li><a href="#" data-href="'.action([\App\Http\Controllers\NotificationController::class, 'getTemplate'], ['transaction_id' => $row->id, 'template_for' => 'new_sale']).'" class="btn-modal" data-container=".view_modal"><i class="fa fa-envelope" aria-hidden="true"></i>'.__('lang_v1.new_sale_notification').'</a></li>';
+                            $html .= '<li><a href="#" data-href="' . action([\App\Http\Controllers\NotificationController::class, 'getTemplate'], ['transaction_id' => $row->id, 'template_for' => 'new_sale']) . '" class="btn-modal" data-container=".view_modal"><i class="fa fa-envelope" aria-hidden="true"></i>' . __('lang_v1.new_sale_notification') . '</a></li>';
                         } else {
-                            $html .= '<li><a href="#" data-href="'.action([\App\Http\Controllers\SellController::class, 'viewMedia'], ['model_id' => $row->id, 'model_type' => \App\Transaction::class, 'model_media_type' => 'shipping_document']).'" class="btn-modal" data-container=".view_modal"><i class="fas fa-paperclip" aria-hidden="true"></i>'.__('lang_v1.shipping_documents').'</a></li>';
+                            $html .= '<li><a href="#" data-href="' . action([\App\Http\Controllers\SellController::class, 'viewMedia'], ['model_id' => $row->id, 'model_type' => \App\Transaction::class, 'model_media_type' => 'shipping_document']) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-paperclip" aria-hidden="true"></i>' . __('lang_v1.shipping_documents') . '</a></li>';
                         }
 
                         $html .= '</ul></div>';
@@ -481,7 +508,7 @@ class SellController extends Controller
                             $discount = $row->total_before_tax * ($discount / 100);
                         }
 
-                        return '<span class="total-discount" data-orig-value="'.$discount.'">'.$this->transactionUtil->num_f($discount, true).'</span>';
+                        return '<span class="total-discount" data-orig-value="' . $discount . '">' . $this->transactionUtil->num_f($discount, true) . '</span>';
                     }
                 )
                 ->editColumn('transaction_date', '{{@format_datetime($transaction_date)}}')
@@ -499,7 +526,7 @@ class SellController extends Controller
                 )
                 ->addColumn('total_remaining', function ($row) {
                     $total_remaining = $row->final_total - $row->total_paid;
-                    $total_remaining_html = '<span class="payment_due" data-orig-value="'.$total_remaining.'">'.$this->transactionUtil->num_f($total_remaining, true).'</span>';
+                    $total_remaining_html = '<span class="payment_due" data-orig-value="' . $total_remaining . '">' . $this->transactionUtil->num_f($total_remaining, true) . '</span>';
 
                     return $total_remaining_html;
                 })
@@ -507,7 +534,7 @@ class SellController extends Controller
                     $return_due_html = '';
                     if (! empty($row->return_exists)) {
                         $return_due = $row->amount_return - $row->return_paid;
-                        $return_due_html .= '<a href="'.action([\App\Http\Controllers\TransactionPaymentController::class, 'show'], [$row->return_transaction_id]).'" class="view_purchase_return_payment_modal"><span class="sell_return_due" data-orig-value="'.$return_due.'">'.$this->transactionUtil->num_f($return_due, true).'</span></a>';
+                        $return_due_html .= '<a href="' . action([\App\Http\Controllers\TransactionPaymentController::class, 'show'], [$row->return_transaction_id]) . '" class="view_purchase_return_payment_modal"><span class="sell_return_due" data-orig-value="' . $return_due . '">' . $this->transactionUtil->num_f($return_due, true) . '</span></a>';
                     }
 
                     return $return_due_html;
@@ -515,32 +542,32 @@ class SellController extends Controller
                 ->editColumn('invoice_no', function ($row) use ($is_crm) {
                     $invoice_no = $row->invoice_no;
                     if (! empty($row->woocommerce_order_id)) {
-                        $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="'.__('lang_v1.synced_from_woocommerce').'"></i>';
+                        $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
                     }
                     if (! empty($row->return_exists)) {
-                        $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="'.__('lang_v1.some_qty_returned_from_sell').'"><i class="fas fa-undo"></i></small>';
+                        $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.some_qty_returned_from_sell') . '"><i class="fas fa-undo"></i></small>';
                     }
                     if (! empty($row->is_recurring)) {
-                        $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="'.__('lang_v1.subscribed_invoice').'"><i class="fas fa-recycle"></i></small>';
+                        $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.subscribed_invoice') . '"><i class="fas fa-recycle"></i></small>';
                     }
 
                     if (! empty($row->recur_parent_id)) {
-                        $invoice_no .= ' &nbsp;<small class="label bg-info label-round no-print" title="'.__('lang_v1.subscription_invoice').'"><i class="fas fa-recycle"></i></small>';
+                        $invoice_no .= ' &nbsp;<small class="label bg-info label-round no-print" title="' . __('lang_v1.subscription_invoice') . '"><i class="fas fa-recycle"></i></small>';
                     }
 
                     if (! empty($row->is_export)) {
-                        $invoice_no .= '</br><small class="label label-default no-print" title="'.__('lang_v1.export').'">'.__('lang_v1.export').'</small>';
+                        $invoice_no .= '</br><small class="label label-default no-print" title="' . __('lang_v1.export') . '">' . __('lang_v1.export') . '</small>';
                     }
 
                     if ($is_crm && ! empty($row->crm_is_order_request)) {
-                        $invoice_no .= ' &nbsp;<small class="label bg-yellow label-round no-print" title="'.__('crm::lang.order_request').'"><i class="fas fa-tasks"></i></small>';
+                        $invoice_no .= ' &nbsp;<small class="label bg-yellow label-round no-print" title="' . __('crm::lang.order_request') . '"><i class="fas fa-tasks"></i></small>';
                     }
 
                     return $invoice_no;
                 })
                 ->editColumn('shipping_status', function ($row) use ($shipping_statuses) {
                     $status_color = ! empty($this->shipping_status_colors[$row->shipping_status]) ? $this->shipping_status_colors[$row->shipping_status] : 'bg-gray';
-                    $status = ! empty($row->shipping_status) ? '<a href="#" class="btn-modal" data-href="'.action([\App\Http\Controllers\SellController::class, 'editShipping'], [$row->id]).'" data-container=".view_modal"><span class="label '.$status_color.'">'.$shipping_statuses[$row->shipping_status].'</span></a>' : '';
+                    $status = ! empty($row->shipping_status) ? '<a href="#" class="btn-modal" data-href="' . action([\App\Http\Controllers\SellController::class, 'editShipping'], [$row->id]) . '" data-container=".view_modal"><span class="label ' . $status_color . '">' . $shipping_statuses[$row->shipping_status] . '</span></a>' : '';
 
                     return $status;
                 })
@@ -549,7 +576,7 @@ class SellController extends Controller
                 ->filterColumn('conatct_name', function ($query, $keyword) {
                     $query->where(function ($q) use ($keyword) {
                         $q->where('contacts.name', 'like', "%{$keyword}%")
-                        ->orWhere('contacts.supplier_business_name', 'like', "%{$keyword}%");
+                            ->orWhere('contacts.supplier_business_name', 'like', "%{$keyword}%");
                     });
                 })
                 ->addColumn('payment_methods', function ($row) use ($payment_types) {
@@ -562,7 +589,7 @@ class SellController extends Controller
                         $payment_method = __('lang_v1.checkout_multi_pay');
                     }
 
-                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="'.$payment_method.'" data-status-name="'.$payment_method.'">'.$payment_method.'</span>' : '';
+                    $html = ! empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
 
                     return $html;
                 })
@@ -571,9 +598,9 @@ class SellController extends Controller
 
                     if ($row->type == 'sales_order') {
                         if ($is_admin && $row->status != 'completed') {
-                            $status = '<span class="edit-so-status label '.$sales_order_statuses[$row->status]['class'].'" data-href="'.action([\App\Http\Controllers\SalesOrderController::class, 'getEditSalesOrderStatus'], ['id' => $row->id]).'">'.$sales_order_statuses[$row->status]['label'].'</span>';
+                            $status = '<span class="edit-so-status label ' . $sales_order_statuses[$row->status]['class'] . '" data-href="' . action([\App\Http\Controllers\SalesOrderController::class, 'getEditSalesOrderStatus'], ['id' => $row->id]) . '">' . $sales_order_statuses[$row->status]['label'] . '</span>';
                         } else {
-                            $status = '<span class="label '.$sales_order_statuses[$row->status]['class'].'" >'.$sales_order_statuses[$row->status]['label'].'</span>';
+                            $status = '<span class="label ' . $sales_order_statuses[$row->status]['class'] . '" >' . $sales_order_statuses[$row->status]['label'] . '</span>';
                         }
                     }
 
@@ -587,12 +614,13 @@ class SellController extends Controller
                         } else {
                             return '';
                         }
-                    }, ]);
+                    },
+                ]);
 
             $rawColumns = ['final_total', 'action', 'total_paid', 'total_remaining', 'payment_status', 'invoice_no', 'discount_amount', 'tax_amount', 'total_before_tax', 'shipping_status', 'types_of_service_name', 'payment_methods', 'return_due', 'conatct_name', 'status'];
 
             return $datatable->rawColumns($rawColumns)
-                      ->make(true);
+                ->make(true);
         }
 
         $business_locations = BusinessLocation::forDropdown($business_id, false);
@@ -623,8 +651,127 @@ class SellController extends Controller
 
 
         return view('sell.index')
-        ->with(compact('business_locations', 'customers', 'is_woocommerce', 'sales_representative', 'is_cmsn_agent_enabled', 'commission_agents', 'service_staffs', 'is_tables_enabled', 'is_service_staff_enabled', 'is_types_service_enabled', 'shipping_statuses', 'sources', 'payment_types'));
+            ->with(compact('business_locations', 'customers', 'is_woocommerce', 'sales_representative', 'is_cmsn_agent_enabled', 'commission_agents', 'service_staffs', 'is_tables_enabled', 'is_service_staff_enabled', 'is_types_service_enabled', 'shipping_statuses', 'sources', 'payment_types'));
     }
+
+    public function sendInvoiceWhatsapp(Request $request)
+    {
+        $invoice = Transaction::with('contact')->find($request->invoice_id);
+        if (!$invoice) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invoice not found.'
+            ]);
+        }
+
+        $business = Business::find($invoice->business_id);
+        $contact = Contact::find($invoice->contact_id);
+
+        // Check if business has WhatsApp enabled
+        if (!$business->enable_whatsapp || empty($business->whatsapp_settings)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'WhatsApp is not enabled for this business or settings are missing.'
+            ]);
+        }
+
+        $customer_number = $contact->mobile;
+        if (empty($customer_number)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer does not have a mobile number.'
+            ]);
+        }
+
+        $customer_name = $contact->name ?? 'Customer';
+        $invoice_no = $invoice->invoice_no ?? '';
+        $invoice_url = $this->transactionUtil->getInvoiceUrl($invoice->id, $invoice->business_id);;
+        // Green API details from business table
+        $whatsapp_settings = $business->whatsapp_settings;
+        $green_api_id = $whatsapp_settings['instance_id'] ?? null;
+        $green_api_token = $whatsapp_settings['api_token'] ?? null;
+
+        if (!$green_api_id || !$green_api_token) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Green API credentials missing.'
+            ]);
+        }
+
+        $whatsapp_status = $this->isWhatsappNumberRegistered($green_api_id, $green_api_token, $customer_number);
+        if (!$whatsapp_status) {
+            return response()->json([
+                'success' => false,
+                'message' => "Customer number {$customer_number} is not registered on WhatsApp."
+            ]);
+        }
+
+        $message = "Hello $customer_name,\n\n"
+            . "Your sale invoice #$invoice_no has been generated.\n"
+            . "You can view or download it here:\n"
+            . "$invoice_url\n\n"
+            . "Thank you.";
+        // Send message via Green API
+        $sent = $this->sendWhatsappViaGreenAPI($green_api_id, $green_api_token, $customer_number, $message);
+        if ($sent) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Invoice sent on WhatsApp successfully.'
+            ]);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send WhatsApp message.'
+            ]);
+        }
+    }
+
+    // Helper function inside same controller
+    private function isWhatsappNumberRegistered($instance_id, $token, $number)
+    {
+        $url = "https://api.green-api.com/waInstance$instance_id/checkWhatsapp/$token";
+
+        $data = [
+            'phoneNumber' => $number // correct param name
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true); // POST request
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $result = json_decode($response, true);
+
+        // test karne ke liye
+        // dd($result);
+
+        return isset($result['existsWhatsapp']) && $result['existsWhatsapp'] === true;
+    }
+
+
+    private function sendWhatsappViaGreenAPI($instance_id, $token, $number, $message)
+    {
+        $url = "https://api.green-api.com/waInstance$instance_id/sendMessage/$token";
+
+        $data = [
+            'chatId' => $number . '@c.us',
+            'message' => $message
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $result = json_decode($response, true);
+        return isset($result['idMessage']) && !empty($result['idMessage'])? true: false;
+    }
+
 
     /**
      * Show the form for creating a new resource.
@@ -705,7 +852,7 @@ class SellController extends Controller
         $default_invoice_schemes = InvoiceScheme::getDefault($business_id);
         if (! empty($default_location) && !empty($default_location->sale_invoice_scheme_id)) {
             $default_invoice_schemes = InvoiceScheme::where('business_id', $business_id)
-                                        ->findorfail($default_location->sale_invoice_scheme_id);
+                ->findorfail($default_location->sale_invoice_scheme_id);
         }
         $shipping_statuses = $this->transactionUtil->shipping_statuses();
 
@@ -733,7 +880,7 @@ class SellController extends Controller
         $is_crm = $this->moduleUtil->isModuleInstalled('Crm');
         if ($is_crm) {
             $crm_settings = Business::where('id', auth()->user()->business_id)
-                                ->value('crm_settings');
+                ->value('crm_settings');
             $crm_settings = ! empty($crm_settings) ? json_decode($crm_settings, true) : [];
 
             if (! empty($crm_settings['enable_order_request'])) {
@@ -802,12 +949,12 @@ class SellController extends Controller
 
         $business_id = request()->session()->get('user.business_id');
         $taxes = TaxRate::where('business_id', $business_id)
-                            ->pluck('name', 'id');
+            ->pluck('name', 'id');
         $query = Transaction::where('business_id', $business_id)
-                    ->where('id', $id)
-                    ->with(['contact', 'delivery_person_user', 'sell_lines' => function ($q) {
-                        $q->whereNull('parent_sell_line_id');
-                    }, 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.product.second_unit', 'sell_lines.variations', 'sell_lines.variations.product_variation', 'payment_lines', 'sell_lines.modifiers', 'sell_lines.lot_details', 'tax', 'sell_lines.sub_unit', 'table', 'service_staff', 'sell_lines.service_staff', 'types_of_service', 'sell_lines.warranties', 'media']);
+            ->where('id', $id)
+            ->with(['contact', 'delivery_person_user', 'sell_lines' => function ($q) {
+                $q->whereNull('parent_sell_line_id');
+            }, 'sell_lines.product', 'sell_lines.product.unit', 'sell_lines.product.second_unit', 'sell_lines.variations', 'sell_lines.variations.product_variation', 'payment_lines', 'sell_lines.modifiers', 'sell_lines.lot_details', 'tax', 'sell_lines.sub_unit', 'table', 'service_staff', 'sell_lines.service_staff', 'types_of_service', 'sell_lines.warranties', 'media']);
 
         if (! auth()->user()->can('sell.view') && ! auth()->user()->can('direct_sell.access') && auth()->user()->can('view_own_sell_only')) {
             $query->where('transactions.created_by', request()->session()->get('user.id'));
@@ -816,9 +963,9 @@ class SellController extends Controller
         $sell = $query->firstOrFail();
 
         $activities = Activity::forSubject($sell)
-           ->with(['causer', 'subject'])
-           ->latest()
-           ->get();
+            ->with(['causer', 'subject'])
+            ->latest()
+            ->get();
 
         $line_taxes = [];
         foreach ($sell->sell_lines as $key => $value) {
@@ -896,14 +1043,18 @@ class SellController extends Controller
         $edit_days = request()->session()->get('business.transaction_edit_days');
         if (! $this->transactionUtil->canBeEdited($id, $edit_days)) {
             return back()
-                ->with('status', ['success' => 0,
-                    'msg' => __('messages.transaction_edit_not_allowed', ['days' => $edit_days]), ]);
+                ->with('status', [
+                    'success' => 0,
+                    'msg' => __('messages.transaction_edit_not_allowed', ['days' => $edit_days]),
+                ]);
         }
 
         //Check if return exist then not allowed
         if ($this->transactionUtil->isReturnExist($id)) {
-            return back()->with('status', ['success' => 0,
-                'msg' => __('lang_v1.return_exist'), ]);
+            return back()->with('status', [
+                'success' => 0,
+                'msg' => __('lang_v1.return_exist'),
+            ]);
         }
 
         $business_id = request()->session()->get('user.business_id');
@@ -912,9 +1063,9 @@ class SellController extends Controller
         $taxes = TaxRate::forBusinessDropdown($business_id, true, true);
 
         $transaction = Transaction::where('business_id', $business_id)
-                            ->with(['price_group', 'types_of_service', 'media', 'media.uploaded_by_user'])
-                            ->whereIn('type', ['sell', 'sales_order'])
-                            ->findorfail($id);
+            ->with(['price_group', 'types_of_service', 'media', 'media.uploaded_by_user'])
+            ->whereIn('type', ['sell', 'sales_order'])
+            ->findorfail($id);
 
         if ($transaction->type == 'sales_order' && ! auth()->user()->can('so.update')) {
             abort(403, 'Unauthorized action.');
@@ -924,68 +1075,68 @@ class SellController extends Controller
         $location_printer_type = BusinessLocation::find($location_id)->receipt_printer_type;
 
         $sell_details = TransactionSellLine::join(
-                            'products AS p',
-                            'transaction_sell_lines.product_id',
-                            '=',
-                            'p.id'
-                        )
-                        ->join(
-                            'variations AS variations',
-                            'transaction_sell_lines.variation_id',
-                            '=',
-                            'variations.id'
-                        )
-                        ->join(
-                            'product_variations AS pv',
-                            'variations.product_variation_id',
-                            '=',
-                            'pv.id'
-                        )
-                        ->leftjoin('variation_location_details AS vld', function ($join) use ($location_id) {
-                            $join->on('variations.id', '=', 'vld.variation_id')
-                                ->where('vld.location_id', '=', $location_id);
-                        })
-                        ->leftjoin('units', 'units.id', '=', 'p.unit_id')
-                        ->leftjoin('units as u', 'p.secondary_unit_id', '=', 'u.id')
-                        ->where('transaction_sell_lines.transaction_id', $id)
-                        ->with(['warranties', 'so_line'])
-                        ->select(
-                            DB::raw("IF(pv.is_dummy = 0, CONCAT(p.name, ' (', pv.name, ':',variations.name, ')'), p.name) AS product_name"),
-                            'p.id as product_id',
-                            'p.enable_stock',
-                            'p.name as product_actual_name',
-                            'p.type as product_type',
-                            'pv.name as product_variation_name',
-                            'pv.is_dummy as is_dummy',
-                            'variations.name as variation_name',
-                            'variations.sub_sku',
-                            'p.barcode_type',
-                            'p.enable_sr_no',
-                            'variations.id as variation_id',
-                            'units.short_name as unit',
-                            'units.allow_decimal as unit_allow_decimal',
-                            'u.short_name as second_unit',
-                            'transaction_sell_lines.secondary_unit_quantity',
-                            'transaction_sell_lines.tax_id as tax_id',
-                            'transaction_sell_lines.item_tax as item_tax',
-                            'transaction_sell_lines.unit_price as default_sell_price',
-                            'transaction_sell_lines.unit_price_inc_tax as sell_price_inc_tax',
-                            'transaction_sell_lines.unit_price_before_discount as unit_price_before_discount',
-                            'transaction_sell_lines.id as transaction_sell_lines_id',
-                            'transaction_sell_lines.id',
-                            'transaction_sell_lines.quantity as quantity_ordered',
-                            'transaction_sell_lines.sell_line_note as sell_line_note',
-                            'transaction_sell_lines.parent_sell_line_id',
-                            'transaction_sell_lines.lot_no_line_id',
-                            'transaction_sell_lines.line_discount_type',
-                            'transaction_sell_lines.line_discount_amount',
-                            'transaction_sell_lines.res_service_staff_id',
-                            'units.id as unit_id',
-                            'transaction_sell_lines.sub_unit_id',
-                            'transaction_sell_lines.so_line_id',
-                            DB::raw('vld.qty_available + transaction_sell_lines.quantity AS qty_available')
-                        )
-                        ->get();
+            'products AS p',
+            'transaction_sell_lines.product_id',
+            '=',
+            'p.id'
+        )
+            ->join(
+                'variations AS variations',
+                'transaction_sell_lines.variation_id',
+                '=',
+                'variations.id'
+            )
+            ->join(
+                'product_variations AS pv',
+                'variations.product_variation_id',
+                '=',
+                'pv.id'
+            )
+            ->leftjoin('variation_location_details AS vld', function ($join) use ($location_id) {
+                $join->on('variations.id', '=', 'vld.variation_id')
+                    ->where('vld.location_id', '=', $location_id);
+            })
+            ->leftjoin('units', 'units.id', '=', 'p.unit_id')
+            ->leftjoin('units as u', 'p.secondary_unit_id', '=', 'u.id')
+            ->where('transaction_sell_lines.transaction_id', $id)
+            ->with(['warranties', 'so_line'])
+            ->select(
+                DB::raw("IF(pv.is_dummy = 0, CONCAT(p.name, ' (', pv.name, ':',variations.name, ')'), p.name) AS product_name"),
+                'p.id as product_id',
+                'p.enable_stock',
+                'p.name as product_actual_name',
+                'p.type as product_type',
+                'pv.name as product_variation_name',
+                'pv.is_dummy as is_dummy',
+                'variations.name as variation_name',
+                'variations.sub_sku',
+                'p.barcode_type',
+                'p.enable_sr_no',
+                'variations.id as variation_id',
+                'units.short_name as unit',
+                'units.allow_decimal as unit_allow_decimal',
+                'u.short_name as second_unit',
+                'transaction_sell_lines.secondary_unit_quantity',
+                'transaction_sell_lines.tax_id as tax_id',
+                'transaction_sell_lines.item_tax as item_tax',
+                'transaction_sell_lines.unit_price as default_sell_price',
+                'transaction_sell_lines.unit_price_inc_tax as sell_price_inc_tax',
+                'transaction_sell_lines.unit_price_before_discount as unit_price_before_discount',
+                'transaction_sell_lines.id as transaction_sell_lines_id',
+                'transaction_sell_lines.id',
+                'transaction_sell_lines.quantity as quantity_ordered',
+                'transaction_sell_lines.sell_line_note as sell_line_note',
+                'transaction_sell_lines.parent_sell_line_id',
+                'transaction_sell_lines.lot_no_line_id',
+                'transaction_sell_lines.line_discount_type',
+                'transaction_sell_lines.line_discount_amount',
+                'transaction_sell_lines.res_service_staff_id',
+                'units.id as unit_id',
+                'transaction_sell_lines.sub_unit_id',
+                'transaction_sell_lines.so_line_id',
+                DB::raw('vld.qty_available + transaction_sell_lines.quantity AS qty_available')
+            )
+            ->get();
 
         if (! empty($sell_details)) {
             foreach ($sell_details as $key => $value) {
@@ -1061,7 +1212,7 @@ class SellController extends Controller
                             ];
                         }
                         $sell_details[$key]->qty_available =
-                        $this->productUtil->calculateComboQuantity($location_id, $combo_variations);
+                            $this->productUtil->calculateComboQuantity($location_id, $combo_variations);
 
                         if ($transaction->status == 'final') {
                             $sell_details[$key]->qty_available = $sell_details[$key]->qty_available + $sell_details[$key]->quantity_ordered;
@@ -1139,7 +1290,7 @@ class SellController extends Controller
         $is_crm = $this->moduleUtil->isModuleInstalled('Crm');
         if ($is_crm) {
             $crm_settings = Business::where('id', auth()->user()->business_id)
-                                ->value('crm_settings');
+                ->value('crm_settings');
             $crm_settings = ! empty($crm_settings) ? json_decode($crm_settings, true) : [];
 
             if (! empty($crm_settings['enable_order_request'])) {
@@ -1150,16 +1301,16 @@ class SellController extends Controller
         $sales_orders = [];
         if (! empty($pos_settings['enable_sales_order']) || $is_order_request_enabled) {
             $sales_orders = Transaction::where('business_id', $business_id)
-                                ->where('type', 'sales_order')
-                                ->where('contact_id', $transaction->contact_id)
-                                ->where(function ($q) use ($transaction) {
-                                    $q->where('status', '!=', 'completed');
+                ->where('type', 'sales_order')
+                ->where('contact_id', $transaction->contact_id)
+                ->where(function ($q) use ($transaction) {
+                    $q->where('status', '!=', 'completed');
 
-                                    if (! empty($transaction->sales_order_ids)) {
-                                        $q->orWhereIn('id', $transaction->sales_order_ids);
-                                    }
-                                })
-                                ->pluck('invoice_no', 'id');
+                    if (! empty($transaction->sales_order_ids)) {
+                        $q->orWhereIn('id', $transaction->sales_order_ids);
+                    }
+                })
+                ->pluck('invoice_no', 'id');
         }
 
         $payment_types = $this->transactionUtil->payment_types($transaction->location_id, false, $business_id);
@@ -1224,7 +1375,7 @@ class SellController extends Controller
         $sales_representative = User::forDropdown($business_id, false, false, true);
 
         return view('sale_pos.quotations')
-                ->with(compact('business_locations', 'customers', 'sales_representative'));
+            ->with(compact('business_locations', 'customers', 'sales_representative'));
     }
 
     /**
@@ -1292,7 +1443,7 @@ class SellController extends Controller
                 $start = request()->start_date;
                 $end = request()->end_date;
                 $sells->whereDate('transaction_date', '>=', $start)
-                            ->whereDate('transaction_date', '<=', $end);
+                    ->whereDate('transaction_date', '<=', $end);
             }
 
             if (request()->has('location_id')) {
@@ -1321,102 +1472,104 @@ class SellController extends Controller
             $sells->groupBy('transactions.id');
 
             return Datatables::of($sells)
-                 ->addColumn(
-                    'action', function ($row) {
+                ->addColumn(
+                    'action',
+                    function ($row) {
                         $html = '<div class="btn-group">
                                 <button type="button" class="tw-dw-btn tw-dw-btn-xs tw-dw-btn-outline  tw-dw-btn-info tw-w-max dropdown-toggle" 
-                                    data-toggle="dropdown" aria-expanded="false">'.
-                                    __('messages.actions').
-                                    '<span class="caret"></span><span class="sr-only">Toggle Dropdown
+                                    data-toggle="dropdown" aria-expanded="false">' .
+                            __('messages.actions') .
+                            '<span class="caret"></span><span class="sr-only">Toggle Dropdown
                                     </span>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-right" role="menu">
                                     <li>
-                                    <a href="#" data-href="'.action([\App\Http\Controllers\SellController::class, 'show'], [$row->id]).'" class="btn-modal" data-container=".view_modal">
-                                        <i class="fas fa-eye" aria-hidden="true"></i>'.__('messages.view').'
+                                    <a href="#" data-href="' . action([\App\Http\Controllers\SellController::class, 'show'], [$row->id]) . '" class="btn-modal" data-container=".view_modal">
+                                        <i class="fas fa-eye" aria-hidden="true"></i>' . __('messages.view') . '
                                     </a>
                                     </li>';
 
                         if (auth()->user()->can('draft.update') || auth()->user()->can('quotation.update')) {
                             if ($row->is_direct_sale == 1) {
                                 $html .= '<li>
-                                            <a target="_blank" href="'.action([\App\Http\Controllers\SellController::class, 'edit'], [$row->id]).'">
-                                                <i class="fas fa-edit"></i>'.__('messages.edit').'
+                                            <a target="_blank" href="' . action([\App\Http\Controllers\SellController::class, 'edit'], [$row->id]) . '">
+                                                <i class="fas fa-edit"></i>' . __('messages.edit') . '
                                             </a>
                                         </li>';
                             } else {
                                 $html .= '<li>
-                                            <a target="_blank" href="'.action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row->id]).'">
-                                                <i class="fas fa-edit"></i>'.__('messages.edit').'
+                                            <a target="_blank" href="' . action([\App\Http\Controllers\SellPosController::class, 'edit'], [$row->id]) . '">
+                                                <i class="fas fa-edit"></i>' . __('messages.edit') . '
                                             </a>
                                         </li>';
                             }
                         }
 
                         $html .= '<li>
-                                    <a href="#" class="print-invoice" data-href="'.route('sell.printInvoice', [$row->id]).'"><i class="fas fa-print" aria-hidden="true"></i>'.__('messages.print').'</a>
+                                    <a href="#" class="print-invoice" data-href="' . route('sell.printInvoice', [$row->id]) . '"><i class="fas fa-print" aria-hidden="true"></i>' . __('messages.print') . '</a>
                                 </li>';
 
                         if (config('constants.enable_download_pdf')) {
                             $sub_status = $row->sub_status == 'proforma' ? 'proforma' : '';
                             $html .= '<li>
-                                        <a href="'.route('quotation.downloadPdf', ['id' => $row->id, 'sub_status' => $sub_status]).'" target="_blank">
-                                            <i class="fas fa-print" aria-hidden="true"></i>'.__('lang_v1.download_pdf').'
+                                        <a href="' . route('quotation.downloadPdf', ['id' => $row->id, 'sub_status' => $sub_status]) . '" target="_blank">
+                                            <i class="fas fa-print" aria-hidden="true"></i>' . __('lang_v1.download_pdf') . '
                                         </a>
                                     </li>';
                         }
 
                         if ((auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) && config('constants.enable_convert_draft_to_invoice')) {
                             $html .= '<li>
-                                        <a href="'.action([\App\Http\Controllers\SellPosController::class, 'convertToInvoice'], [$row->id]).'" class="convert-draft"><i class="fas fa-sync-alt"></i>'.__('lang_v1.convert_to_invoice').'</a>
+                                        <a href="' . action([\App\Http\Controllers\SellPosController::class, 'convertToInvoice'], [$row->id]) . '" class="convert-draft"><i class="fas fa-sync-alt"></i>' . __('lang_v1.convert_to_invoice') . '</a>
                                     </li>';
                         }
 
                         if ($row->sub_status != 'proforma') {
                             $html .= '<li>
-                                        <a href="'.action([\App\Http\Controllers\SellPosController::class, 'convertToProforma'], [$row->id]).'" class="convert-to-proforma"><i class="fas fa-sync-alt"></i>'.__('lang_v1.convert_to_proforma').'</a>
+                                        <a href="' . action([\App\Http\Controllers\SellPosController::class, 'convertToProforma'], [$row->id]) . '" class="convert-to-proforma"><i class="fas fa-sync-alt"></i>' . __('lang_v1.convert_to_proforma') . '</a>
                                     </li>';
                         }
 
                         if (auth()->user()->can('draft.delete') || auth()->user()->can('quotation.delete')) {
                             $html .= '<li>
-                                <a href="'.action([\App\Http\Controllers\SellPosController::class, 'destroy'], [$row->id]).'" class="delete-sale"><i class="fas fa-trash"></i>'.__('messages.delete').'</a>
+                                <a href="' . action([\App\Http\Controllers\SellPosController::class, 'destroy'], [$row->id]) . '" class="delete-sale"><i class="fas fa-trash"></i>' . __('messages.delete') . '</a>
                                 </li>';
                         }
 
                         if ($row->sub_status == 'quotation') {
                             $html .= '<li>
-                                        <a href="'.action([\App\Http\Controllers\SellPosController::class, 'copyQuotation'],[$row->id]).'" 
-                                        class="copy_quotation"><i class="fas fa-copy"></i>'.
-                                        __("lang_v1.copy_quotation").'</a>
+                                        <a href="' . action([\App\Http\Controllers\SellPosController::class, 'copyQuotation'], [$row->id]) . '" 
+                                        class="copy_quotation"><i class="fas fa-copy"></i>' .
+                                __("lang_v1.copy_quotation") . '</a>
                                     </li>
                                     <li>
-                                        <a href="#" data-href="'.action("\App\Http\Controllers\NotificationController@getTemplate", ["transaction_id" => $row->id,"template_for" => "new_quotation"]).'" class="btn-modal" data-container=".view_modal"><i class="fa fa-envelope" aria-hidden="true"></i>' . __("lang_v1.new_quotation_notification") . '
+                                        <a href="#" data-href="' . action("\App\Http\Controllers\NotificationController@getTemplate", ["transaction_id" => $row->id, "template_for" => "new_quotation"]) . '" class="btn-modal" data-container=".view_modal"><i class="fa fa-envelope" aria-hidden="true"></i>' . __("lang_v1.new_quotation_notification") . '
                                         </a>
                                     </li>';
 
                             $html .= '<li>
-                                        <a href="'.action("\App\Http\Controllers\SellPosController@showInvoiceUrl", [$row->id]).'" class="view_invoice_url"><i class="fas fa-eye"></i>'.__("lang_v1.view_quote_url").'</a>
+                                        <a href="' . action("\App\Http\Controllers\SellPosController@showInvoiceUrl", [$row->id]) . '" class="view_invoice_url"><i class="fas fa-eye"></i>' . __("lang_v1.view_quote_url") . '</a>
                                     </li>';
                         }
 
                         $html .= '</ul></div>';
 
                         return $html;
-                    })
+                    }
+                )
                 ->removeColumn('id')
                 ->editColumn('invoice_no', function ($row) {
                     $invoice_no = $row->invoice_no;
                     if (! empty($row->woocommerce_order_id)) {
-                        $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="'.__('lang_v1.synced_from_woocommerce').'"></i>';
+                        $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
                     }
 
                     if ($row->sub_status == 'proforma') {
-                        $invoice_no .= '<br><span class="label bg-gray">'.__('lang_v1.proforma_invoice').'</span>';
+                        $invoice_no .= '<br><span class="label bg-gray">' . __('lang_v1.proforma_invoice') . '</span>';
                     }
 
                     if (! empty($row->is_export)) {
-                        $invoice_no .= '</br><small class="label label-default no-print" title="'.__('lang_v1.export').'">'.__('lang_v1.export').'</small>';
+                        $invoice_no .= '</br><small class="label label-default no-print" title="' . __('lang_v1.export') . '">' . __('lang_v1.export') . '</small>';
                     }
 
                     return $invoice_no;
@@ -1428,7 +1581,7 @@ class SellController extends Controller
                 ->filterColumn('conatct_name', function ($query, $keyword) {
                     $query->where(function ($q) use ($keyword) {
                         $q->where('contacts.name', 'like', "%{$keyword}%")
-                        ->orWhere('contacts.supplier_business_name', 'like', "%{$keyword}%");
+                            ->orWhere('contacts.supplier_business_name', 'like', "%{$keyword}%");
                     });
                 })
                 ->filterColumn('added_by', function ($query, $keyword) {
@@ -1441,7 +1594,8 @@ class SellController extends Controller
                         } else {
                             return '';
                         }
-                    }, ])
+                    },
+                ])
                 ->rawColumns(['action', 'invoice_no', 'transaction_date', 'conatct_name'])
                 ->make(true);
         }
@@ -1464,8 +1618,8 @@ class SellController extends Controller
             $user_id = request()->session()->get('user.id');
 
             $transaction = Transaction::where('business_id', $business_id)
-                            ->where('type', 'sell')
-                            ->findorfail($id);
+                ->where('type', 'sell')
+                ->findorfail($id);
             $duplicate_transaction_data = [];
             foreach ($transaction->toArray() as $key => $value) {
                 if (! in_array($key, ['id', 'created_at', 'updated_at'])) {
@@ -1502,14 +1656,16 @@ class SellController extends Controller
 
             DB::commit();
 
-            $output = ['success' => 0,
+            $output = [
+                'success' => 0,
                 'msg' => trans('lang_v1.duplicate_sell_created_successfully'),
             ];
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
+            \Log::emergency('File:' . $e->getFile() . 'Line:' . $e->getLine() . 'Message:' . $e->getMessage());
 
-            $output = ['success' => 0,
+            $output = [
+                'success' => 0,
                 'msg' => trans('messages.something_went_wrong'),
             ];
         }
@@ -1542,21 +1698,21 @@ class SellController extends Controller
         $business_id = request()->session()->get('user.business_id');
 
         $transaction = Transaction::where('business_id', $business_id)
-                                ->with(['media', 'media.uploaded_by_user'])
-                                ->findorfail($id);
+            ->with(['media', 'media.uploaded_by_user'])
+            ->findorfail($id);
 
         $users = User::forDropdown($business_id, false, false, false);
 
         $shipping_statuses = $this->transactionUtil->shipping_statuses();
 
         $activities = Activity::forSubject($transaction)
-           ->with(['causer', 'subject'])
-           ->where('activity_log.description', 'shipping_edited')
-           ->latest()
-           ->get();
+            ->with(['causer', 'subject'])
+            ->where('activity_log.description', 'shipping_edited')
+            ->latest()
+            ->get();
 
         return view('sell.partials.edit_shipping')
-               ->with(compact('transaction', 'shipping_statuses', 'activities', 'users'));
+            ->with(compact('transaction', 'shipping_statuses', 'activities', 'users'));
     }
 
     /**
@@ -1575,15 +1731,23 @@ class SellController extends Controller
 
         try {
             $input = $request->only([
-                'shipping_details', 'shipping_address',
-                'shipping_status', 'delivered_to', 'delivery_person', 'shipping_custom_field_1', 'shipping_custom_field_2', 'shipping_custom_field_3', 'shipping_custom_field_4', 'shipping_custom_field_5',
+                'shipping_details',
+                'shipping_address',
+                'shipping_status',
+                'delivered_to',
+                'delivery_person',
+                'shipping_custom_field_1',
+                'shipping_custom_field_2',
+                'shipping_custom_field_3',
+                'shipping_custom_field_4',
+                'shipping_custom_field_5',
             ]);
 
 
             $business_id = $request->session()->get('user.business_id');
 
             $transaction = Transaction::where('business_id', $business_id)
-                                ->findOrFail($id);
+                ->findOrFail($id);
 
             $transaction_before = $transaction->replicate();
 
@@ -1592,13 +1756,15 @@ class SellController extends Controller
             $activity_property = ['update_note' => $request->input('shipping_note', '')];
             $this->transactionUtil->activityLog($transaction, 'shipping_edited', $transaction_before, $activity_property);
 
-            $output = ['success' => 1,
+            $output = [
+                'success' => 1,
                 'msg' => trans('lang_v1.updated_success'),
             ];
         } catch (\Exception $e) {
-            \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
+            \Log::emergency('File:' . $e->getFile() . 'Line:' . $e->getLine() . 'Message:' . $e->getMessage());
 
-            $output = ['success' => 0,
+            $output = [
+                'success' => 0,
                 'msg' => trans('messages.something_went_wrong'),
             ];
         }
@@ -1639,7 +1805,7 @@ class SellController extends Controller
         $delevery_person = User::forDropdown($business_id, false, false, true);
 
         return view('sell.shipments')->with(compact('shipping_statuses'))
-                ->with(compact('business_locations', 'customers', 'sales_representative', 'is_service_staff_enabled', 'service_staffs', 'delevery_person'));
+            ->with(compact('business_locations', 'customers', 'sales_representative', 'is_service_staff_enabled', 'service_staffs', 'delevery_person'));
     }
 
     public function viewMedia($model_id)
@@ -1649,8 +1815,8 @@ class SellController extends Controller
             $business_id = request()->session()->get('user.business_id');
 
             $query = Media::where('business_id', $business_id)
-                        ->where('model_id', $model_id)
-                        ->where('model_type', $model_type);
+                ->where('model_id', $model_id)
+                ->where('model_type', $model_type);
 
             $title = __('lang_v1.attachments');
             if (! empty(request()->input('model_media_type'))) {

@@ -12,13 +12,13 @@
 
 <!-- Main content -->
 <section class="content">
-{!! Form::open(['url' => action([\App\Http\Controllers\BusinessController::class, 'postBusinessSettings']), 'method' => 'post', 'id' => 'bussiness_edit_form',
-           'files' => true ]) !!}
+    {!! Form::open(['url' => action([\App\Http\Controllers\BusinessController::class, 'postBusinessSettings']), 'method' => 'post', 'id' => 'bussiness_edit_form',
+    'files' => true ]) !!}
     <div class="row">
         <div class="col-xs-12">
-       <!--  <pos-tab-container> -->
-        {{-- <div class="col-xs-12 pos-tab-container"> --}}
-        @component('components.widget', ['class' =>  'pos-tab-container'])
+            <!--  <pos-tab-container> -->
+            {{-- <div class="col-xs-12 pos-tab-container"> --}}
+            @component('components.widget', ['class' => 'pos-tab-container'])
             <div class="col-lg-2 col-md-2 col-sm-2 col-xs-2 pos-tab-menu tw-rounded-lg">
                 <div class="list-group">
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base  active">@lang('business.business')</a>
@@ -33,6 +33,9 @@
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('business.system')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.prefixes')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.email_settings')</a>
+                    @if($business->enable_whatsapp == 1)
+                    <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">Whatsapp Setting</a>
+                    @endif
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.sms_settings')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.reward_point_settings')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.modules')</a>
@@ -71,6 +74,7 @@
                 <!-- tab 8 end -->
                 <!-- tab 9 start -->
                 @include('business.partials.settings_email')
+                @include('business.partials.settings_whatsapp')
                 <!-- tab 9 end -->
                 <!-- tab 10 start -->
                 @include('business.partials.settings_sms')
@@ -83,9 +87,9 @@
                 <!-- tab 12 end -->
                 @include('business.partials.settings_custom_labels')
             </div>
-        @endcomponent
-        {{-- </div> --}}
-        <!--  </pos-tab-container> -->
+            @endcomponent
+            {{-- </div> --}}
+            <!--  </pos-tab-container> -->
         </div>
     </div>
 
@@ -94,7 +98,7 @@
             <button class="tw-dw-btn tw-dw-btn-error tw-dw-btn-lg tw-text-white" type="submit">@lang('business.update_settings')</button>
         </div>
     </div>
-{!! Form::close() !!}
+    {!! Form::close() !!}
 </section>
 <!-- /.content -->
 @stop
@@ -111,10 +115,10 @@
         }
     });
 
-    $(document).ready(function(){
+    $(document).ready(function() {
 
-    
-        $('#test_email_btn').click( function() {
+
+        $('#test_email_btn').click(function() {
             var data = {
                 mail_driver: $('#mail_driver').val(),
                 mail_host: $('#mail_host').val(),
@@ -146,7 +150,36 @@
             });
         });
 
-        $('#test_sms_btn').click( function() {
+        $('#test_whatsapp_btn').click(function() {
+            var data = {
+                instance_id: $('#whatsapp_instance_id').val(),
+                api_token: $('#whatsapp_api_token').val(),
+                _token: $('meta[name="csrf-token"]').attr('content'),
+            };
+
+            $.ajax({
+                method: 'post',
+                data: data,
+                url: "{{ action([\App\Http\Controllers\BusinessController::class, 'testWhatsAppConfiguration']) }}",
+                dataType: 'json',
+                success: function(result) {
+                    if (result.success == true) {
+                        swal({
+                            text: result.msg,
+                            icon: 'success'
+                        });
+                    } else {
+                        swal({
+                            text: result.msg,
+                            icon: 'error'
+                        });
+                    }
+                },
+            });
+        });
+
+
+        $('#test_sms_btn').click(function() {
             var test_number = $('#test_number').val();
             if (test_number.trim() == '') {
                 toastr.error('{{__("lang_v1.test_number_is_required")}}');
@@ -206,12 +239,12 @@
 
         });
 
-        $('select.custom_labels_products').change(function(){
+        $('select.custom_labels_products').change(function() {
             value = $(this).val();
             textarea = $(this).parents('div.custom_label_product_div').find('div.custom_label_product_dropdown');
-            if(value == 'dropdown'){
+            if (value == 'dropdown') {
                 textarea.removeClass('hide');
-            } else{
+            } else {
                 textarea.addClass('hide');
             }
         })

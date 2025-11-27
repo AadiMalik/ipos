@@ -36,6 +36,7 @@ class Business extends Model
         'ref_no_prefixes' => 'array',
         'enabled_modules' => 'array',
         'email_settings' => 'array',
+        'whatsapp_settings' => 'array',
         'sms_settings' => 'array',
         'common_settings' => 'array',
         'weighing_scale_setting' => 'array',
