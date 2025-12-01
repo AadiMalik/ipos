@@ -360,6 +360,8 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     //Stock Transfer
     Route::get('stock-transfers/print/{id}', [StockTransferController::class, 'printInvoice']);
     Route::post('stock-transfers/update-status/{id}', [StockTransferController::class, 'updateStatus']);
+    Route::get('/stock-transfer/product-list-by-location', [StockTransferController::class, 'productListByLocation']);
+    Route::post('/stock-transfer/get-selected-products', [StockTransferController::class, 'getSelectedProducts']);
     Route::resource('stock-transfers', StockTransferController::class);
 
     Route::get('/opening-stock/add/{product_id}', [OpeningStockController::class, 'add']);
@@ -475,7 +477,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::resource('warranties', WarrantyController::class);
 
     Route::resource('dashboard-configurator', DashboardConfiguratorController::class)
-    ->only(['edit', 'update']);
+        ->only(['edit', 'update']);
 
     Route::get('view-media/{model_id}', [SellController::class, 'viewMedia']);
 
