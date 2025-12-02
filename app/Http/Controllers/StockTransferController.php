@@ -15,6 +15,9 @@ use Illuminate\Http\Request;
 use Spatie\Activitylog\Models\Activity;
 use App\Events\StockTransferCreatedOrModified;
 use App\VariationLocationDetails;
+use Maatwebsite\Excel\Excel;
+use App\Imports\StockTransferImport;
+use App\Variation;
 
 class StockTransferController extends Controller
 {
@@ -952,7 +955,83 @@ class StockTransferController extends Controller
         ];
     }
 
+    //import file
 
+    public function importExcelProducts(Request $request, Excel $excel)
+    {
+        $business_id = $request->session()->get('user.business_id');
+        $location_id = $request->input('location_id');
+        $row_index   = $request->input('start_index') ?? 0;
+
+        if (!$request->hasFile('file')) {
+            return ['error' => 'No file uploaded'];
+        }
+
+        // Use toCollection() to get rows immediately
+        $sheets = $excel->toCollection(new StockTransferImport(), $request->file('file'));
+
+        // Usually first sheet
+        $rows = $sheets->first();
+
+        if (!$rows || $rows->isEmpty()) {
+            return ['error' => 'No rows found in the uploaded file'];
+        }
+
+        $html = '';
+        $skipped = [];
+
+        foreach ($rows as $row) {
+            // Convert to array
+            $row = $row->toArray();
+            if (!isset($row['sku']) || empty($row['sku'])) {
+                continue;
+            }
+
+            $sub_sku = trim($row['sku']);
+            $qty     = isset($row['quantity']) ? floatval($row['quantity']) : 1;
+            // Find variation
+            $variation = Variation::where('sub_sku', $sub_sku)->first();
+            if (!$variation) {
+                $skipped[] = $sub_sku . " (Not Found)";
+                continue;
+            }
+
+            // Check stock
+            $stock = VariationLocationDetails::where('variation_id', $variation->id)
+                ->where('location_id', $location_id)
+                ->value('qty_available');
+            if ((int)$stock <= 0) {
+                $skipped[] = $sub_sku . " (Out of Stock)";
+                continue;
+            }
+            // Get product details
+            $product = $this->productUtil->getDetailsFromVariation(
+                $variation->id,
+                $business_id,
+                $location_id
+            );
+
+            $product->formatted_qty_available = $this->productUtil->num_f($product->qty_available);
+            $product->quantity_ordered = $qty;
+
+            $sub_units = $this->productUtil->getSubUnits(
+                $business_id,
+                $product->unit_id,
+                false,
+                $product->id
+            );
+            $html .= view('stock_transfer.partials.product_table_row')
+                ->with(compact('product', 'row_index', 'sub_units'))
+                ->render();
+
+            $row_index++;
+        }
+        return [
+            'html'      => $html,
+            'new_index' => $row_index,
+            'skipped'   => $skipped
+        ];
+    }
     /**
      * Update the specified resource in storage.
      *

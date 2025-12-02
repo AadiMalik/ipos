@@ -362,6 +362,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::post('stock-transfers/update-status/{id}', [StockTransferController::class, 'updateStatus']);
     Route::get('/stock-transfer/product-list-by-location', [StockTransferController::class, 'productListByLocation']);
     Route::post('/stock-transfer/get-selected-products', [StockTransferController::class, 'getSelectedProducts']);
+    Route::post('/stock-transfer/import-excel-products', [StockTransferController::class, 'importExcelProducts']);
     Route::resource('stock-transfers', StockTransferController::class);
 
     Route::get('/opening-stock/add/{product_id}', [OpeningStockController::class, 'add']);

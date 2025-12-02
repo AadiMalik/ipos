@@ -280,6 +280,58 @@ $('#product_selector').on('change', function () {
     });
 });
 
+$('#import_excel_btn').on('click', function () {
+
+    var file = $('#import_excel_file')[0].files[0];
+    var location_id = $('#location_id').val();
+    var row_index = parseInt($('#product_row_index').val());
+    if (!location_id) {
+        alert("Please select From Location");
+        return;
+    }
+    if (!file) {
+        alert("Please select an Excel file");
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('file', file);
+    formData.append('location_id', location_id);
+    formData.append('start_index', row_index);
+
+    $.ajax({
+        url: '/stock-transfer/import-excel-products',
+        method: 'POST',
+        data: formData,
+        contentType: false,
+        processData: false,
+        success: function (res) {
+
+            if (res.error) {
+                alert(res.error);
+                return;
+            }
+
+            // Clear previous rows
+            $('table#stock_adjustment_product_table tbody').empty();
+
+            // Add new rows
+            $('table#stock_adjustment_product_table tbody').append(res.html);
+
+            // Update row index
+            $('#product_row_index').val(res.new_index);
+
+            if (res.skipped && res.skipped.length > 0) {
+                alert("Skipped:\n" + res.skipped.join("\n"));
+            }
+
+            update_table_total();
+        }
+    });
+
+});
+
+
 
 function stock_transfer_product_row(variation_id) {
     var row_index = parseInt($('#product_row_index').val());

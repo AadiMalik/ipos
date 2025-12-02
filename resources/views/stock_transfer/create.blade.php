@@ -76,7 +76,7 @@
     <!-- end-->
     @component('components.widget', ['class' => 'box-solid'])
     <div class="row">
-        <div class="col-sm-8 col-sm-offset-2">
+        <div class="col-sm-12">
             <div class="form-group">
                 <div class="input-group">
                     <span class="input-group-addon">
@@ -91,7 +91,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-sm-8 col-sm-offset-2">
+        <div class="col-sm-6">
             <div class="form-group">
                 {!! Form::label('product_selector', 'Select Products:') !!}
                 {!! Form::select('product_selector[]', [], null, [
@@ -102,6 +102,23 @@
                 ]) !!}
             </div>
         </div>
+        <div class="col-sm-6">
+            <div class="form-group">
+                <label>Import Excel:<a href="{{ asset('files/stock_transfer_Import_template.xlsx') }}" download class="text-info">
+                Sample File
+            </a></label>
+                <div class="input-group">
+                    <input type="file" name="file" id="import_excel_file" class="form-control">
+                    <span class="input-group-btn">
+                        <button type="button" id="import_excel_btn" class="btn btn-primary">
+                            Import Excel
+                        </button>
+                    </span>
+                </div>
+
+            </div>
+        </div>
+
     </div>
     <div class="row">
         <div class="col-sm-10 col-sm-offset-1">
