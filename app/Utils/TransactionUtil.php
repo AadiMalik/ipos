@@ -6362,9 +6362,6 @@ class TransactionUtil extends Util
 
         if (! empty(request()->input('user_id'))) {
             $registers->where('cash_registers.user_id', request()->input('user_id'));
-        }else{
-            $user_id = Auth()->user()->id;
-            $registers->where('cash_registers.user_id', $user_id);
         }
         if (! empty(request()->input('status'))) {
             $registers->where('cash_registers.status', request()->input('status'));
