@@ -4,30 +4,106 @@ namespace App\Helpers;
 
 class MraHelper
 {
+
+    public static function testConnection($business, $settings)
+    {
+        // Check required fields
+        if (empty($settings['ebsMraId']) || empty($settings['areaCode']) || empty($settings['mra_cert'])) {
+            throw new \Exception("Missing MRA settings for test.");
+        }
+
+        // Read certificate
+        $certPath = storage_path("app/" . $settings['mra_cert']);
+        if (!file_exists($certPath)) {
+            throw new \Exception("Certificate file not found.");
+        }
+
+        $certContent = file_get_contents($certPath);
+        $cert = openssl_x509_read($certContent);
+        if ($cert === false) {
+            throw new \Exception("Failed to read certificate content.");
+        }
+
+        $pubKeyDetails = openssl_pkey_get_details(openssl_pkey_get_public($cert));
+        $publicKey = $pubKeyDetails['key'];
+
+        // AES key
+        $aesKey = openssl_random_pseudo_bytes(32);
+        $aesKeyBase64 = base64_encode($aesKey);
+
+        $payload = [
+            'encryptKey' => $aesKeyBase64,
+            'username' => $settings['ebsMraId'], // for testing, username same as ID
+            'password' => 'TEST_PASSWORD',       // sandbox test
+            'refreshToken' => true
+        ];
+
+        $encryptedData = '';
+        openssl_public_encrypt(json_encode($payload), $encryptedData, $publicKey);
+        $base64EncodedData = base64_encode($encryptedData);
+
+        $postData = [
+            'requestId' => mt_rand(),
+            'payload' => $base64EncodedData
+        ];
+
+        $headers = [
+            'Content-Type: application/json',
+            'ebsMraId: ' . $settings['ebsMraId'],
+            'username: ' . $settings['ebsMraId'],
+            'areaCode: ' . $settings['areaCode']
+        ];
+
+        $url = $settings['environment'] === 'sandbox'
+            ? 'https://vfisc.mra.mu/einvoice-token-service/token-api/generate-token'
+            : 'https://vfisc.mra.mu/einvoice-token-service/token-api/generate-token';
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+
+        $response = curl_exec($ch);
+        if ($response === false) {
+            throw new \Exception('cURL Error: ' . curl_error($ch));
+        }
+
+        $respArr = json_decode($response, true);
+        if (!isset($respArr['token'])) {
+            throw new \Exception('Token not received. Response: ' . $response);
+        }
+
+        return "Test Successful! Token: " . $respArr['token'];
+    }
+
     public static function generateToken($transaction, $products, $business_gov)
     {
         $itemList = [];
         $itemCounter = 1;
         dd($products);
         foreach ($products as $product) {
-        $itemList[] = [
-            'itemNo' => (string) $itemCounter++,
-            'taxCode' => 'TC01',
-            'nature' => 'GOODS',
-            'productCodeMra' => '',
-            'productCodeOwn' => 'ITEMCODE' . $product['product_id'], 
-            'itemDesc' => 'ITEM NAME ' . $product['product_id'], 
-            'quantity' => $product['quantity'],
-            'unitPrice' => $product['unit_price'],
-            'discount' => $product['line_discount_amount'],
-            'discountedValue' => round($product['unit_price'] - $product['line_discount_amount'], 2),
-            'amtWoVatCur' => round($product['unit_price'] - $product['line_discount_amount'], 2),
-            'amtWoVatMur' => round($product['unit_price'] - $product['line_discount_amount'], 2),
-            'vatAmt' => $product['item_tax'],
-            'totalPrice' => round($product['unit_price_inc_tax'], 2)
-        ];
-    }
-dd($products);
+            $itemList[] = [
+                'itemNo' => (string) $itemCounter++,
+                'taxCode' => 'TC01',
+                'nature' => 'GOODS',
+                'productCodeMra' => '',
+                'productCodeOwn' => 'ITEMCODE' . $product['product_id'],
+                'itemDesc' => 'ITEM NAME ' . $product['product_id'],
+                'quantity' => $product['quantity'],
+                'unitPrice' => $product['unit_price'],
+                'discount' => $product['line_discount_amount'],
+                'discountedValue' => round($product['unit_price'] - $product['line_discount_amount'], 2),
+                'amtWoVatCur' => round($product['unit_price'] - $product['line_discount_amount'], 2),
+                'amtWoVatMur' => round($product['unit_price'] - $product['line_discount_amount'], 2),
+                'vatAmt' => $product['item_tax'],
+                'totalPrice' => round($product['unit_price_inc_tax'], 2)
+            ];
+        }
+        dd($products);
         $ebsMraId = '171501038171896R87B7D10X';
         $ebsMraUsername = 'idamauritius';
         $ebsMraPassword = 'Dansmoris0813@@';

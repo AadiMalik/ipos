@@ -33,13 +33,15 @@
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('business.system')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.prefixes')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.email_settings')</a>
-                    @if($business->enable_whatsapp == 1)
-                    <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">Whatsapp Setting</a>
-                    @endif
+
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.sms_settings')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.reward_point_settings')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.modules')</a>
                     <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">@lang('lang_v1.custom_labels')</a>
+                    <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">MRA Invoicing</a>
+                    @if($business->enable_whatsapp == 1)
+                    <a href="#" class="list-group-item text-center tw-font-bold tw-text-sm md:tw-text-base">Whatsapp Setting</a>
+                    @endif
                 </div>
             </div>
             <div class="col-lg-10 col-md-10 col-sm-10 col-xs-10 pos-tab">
@@ -74,7 +76,6 @@
                 <!-- tab 8 end -->
                 <!-- tab 9 start -->
                 @include('business.partials.settings_email')
-                @include('business.partials.settings_whatsapp')
                 <!-- tab 9 end -->
                 <!-- tab 10 start -->
                 @include('business.partials.settings_sms')
@@ -86,6 +87,10 @@
                 @include('business.partials.settings_modules')
                 <!-- tab 12 end -->
                 @include('business.partials.settings_custom_labels')
+                <!-- tab 13 start -->
+                @include('business.partials.settings_mra_invoicing')
+                <!-- tab 13 end -->
+                @include('business.partials.settings_whatsapp')
             </div>
             @endcomponent
             {{-- </div> --}}
@@ -237,6 +242,47 @@
                 },
             });
 
+        });
+        $('#test_mra_btn').click(function() {
+            var formData = new FormData();
+            formData.append('environment', $('#mra_environment').val());
+            formData.append('ebsMraId', $('input[name="mra_settings[ebsMraId]"]').val());
+            formData.append('areaCode', $('input[name="mra_settings[areaCode]"]').val());
+
+            var sandboxFile = $('input[name="sandbox_cert"]')[0].files[0];
+            var productionFile = $('input[name="production_cert"]')[0].files[0];
+            if (sandboxFile) formData.append('sandbox_cert', sandboxFile);
+            if (productionFile) formData.append('production_cert', productionFile);
+
+            formData.append('_token', $('meta[name="csrf-token"]').attr('content'));
+
+            $.ajax({
+                url: "{{ action([\App\Http\Controllers\BusinessController::class, 'testMraConnection']) }}",
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                dataType: 'json',
+                beforeSend: function() {
+                    $('#test_mra_btn').attr('disabled', true).text('Testing...');
+                },
+                success: function(result) {
+                    $('#test_mra_btn').attr('disabled', false).text('Test MRA Connection');
+                    swal({
+                        title: result.success ? 'Success!' : 'Error!',
+                        text: result.msg,
+                        icon: result.success ? 'success' : 'error'
+                    });
+                },
+                error: function(xhr, status, error) {
+                    $('#test_mra_btn').attr('disabled', false).text('Test MRA Connection');
+                    swal({
+                        title: 'Error!',
+                        text: 'AJAX Error: ' + error,
+                        icon: 'error'
+                    });
+                }
+            });
         });
 
         $('select.custom_labels_products').change(function() {

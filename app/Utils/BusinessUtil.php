@@ -440,6 +440,16 @@ class BusinessUtil extends Util
     }
 
     /**
+     * Return the default setting for the mra setting.
+     *
+     * @return array
+     */
+    public function defaultMraSettings()
+    {
+        return ['environment' => '', 'ebsMraId' => '', 'mra_username' => '','mra_password' => '', 'areaCode' => '', 'sandbox_cert' => '','production_cert' => ''];
+    }
+
+    /**
      * Return the default setting for the email.
      *
      * @return array

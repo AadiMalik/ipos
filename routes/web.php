@@ -125,6 +125,7 @@ Route::middleware(['setData', 'auth', 'SetSessionData', 'language', 'timezone', 
     Route::post('/test-email', [BusinessController::class, 'testEmailConfiguration']);
     Route::post('/test-whatsapp', [BusinessController::class, 'testWhatsAppConfiguration']);
     Route::post('/test-sms', [BusinessController::class, 'testSmsConfiguration']);
+    Route::post('/test-mra', [BusinessController::class, 'testMraConnection']);
     Route::get('/business/settings', [BusinessController::class, 'getBusinessSettings'])->name('business.getBusinessSettings');
     Route::post('/business/update', [BusinessController::class, 'postBusinessSettings'])->name('business.postBusinessSettings');
     Route::get('/user/profile', [UserController::class, 'getProfile'])->name('user.getProfile');

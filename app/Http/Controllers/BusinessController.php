@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Business;
 use App\Currency;
+use App\Helpers\MraHelper;
 use App\Notifications\TestEmailNotification;
 use App\System;
 use App\TaxRate;
@@ -14,6 +15,7 @@ use App\Utils\ModuleUtil;
 use App\Utils\RestaurantUtil;
 use Carbon\Carbon;
 use DateTimeZone;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -180,6 +182,7 @@ class BusinessController extends Controller
                 'currency_id',
                 'time_zone',
                 'enable_whatsapp',
+                'enable_mra_invoicing',
                 'fy_start_month',
                 'accounting_method',
                 'tax_label_1',
@@ -339,6 +342,7 @@ class BusinessController extends Controller
         $email_settings = empty($business->email_settings) ? $this->businessUtil->defaultEmailSettings() : $business->email_settings;
 
         $whatsapp_settings = empty($business->whatsapp_settings) ? $this->businessUtil->defaultWhatsappSettings() : $business->whatsapp_settings;
+        $mra_settings = empty($business->mra_invoicing_settings) ? $this->businessUtil->defaultMraSettings() : $business->mra_invoicing_settings;
 
         $sms_settings = empty($business->sms_settings) ? $this->businessUtil->defaultSmsSettings() : $business->sms_settings;
 
@@ -358,9 +362,9 @@ class BusinessController extends Controller
 
         $payment_types = $this->moduleUtil->payment_types(null, false, $business_id);
 
-        return view('business.settings', compact('business', 'currencies', 'tax_rates', 'timezone_list', 'months', 'accounting_methods', 'commission_agent_dropdown', 'units_dropdown', 'date_formats', 'shortcuts', 'pos_settings', 'modules', 'theme_colors', 'email_settings', 'whatsapp_settings', 'sms_settings', 'mail_drivers', 'allow_superadmin_email_settings', 'custom_labels', 'common_settings', 'weighing_scale_setting', 'payment_types'));
+        return view('business.settings', compact('business', 'currencies', 'tax_rates', 'timezone_list', 'months', 'accounting_methods', 'commission_agent_dropdown', 'units_dropdown', 'date_formats', 'shortcuts', 'pos_settings', 'modules', 'theme_colors', 'email_settings', 'whatsapp_settings', 'mra_settings', 'sms_settings', 'mail_drivers', 'allow_superadmin_email_settings', 'custom_labels', 'common_settings', 'weighing_scale_setting', 'payment_types'));
     }
-    
+
 
     /**
      * Updates business settings
@@ -410,6 +414,7 @@ class BusinessController extends Controller
                 'theme_color',
                 'email_settings',
                 'whatsapp_settings',
+                'mra_invoicing_settings',
                 'sms_settings',
                 'rp_name',
                 'amount_for_unit_rp',
@@ -502,6 +507,23 @@ class BusinessController extends Controller
             $business_id = request()->session()->get('user.business_id');
             $business = Business::where('id', $business_id)->first();
 
+            // --- MRA Invoicing Settings ---
+            $mra_settings = $request->input('mra_settings', []);
+            $existing_mra = $business->mra_invoicing_settings ?? [];
+            // Save uploaded certificates if any
+            $envs = ['sandbox', 'production'];
+            foreach ($envs as $env) {
+                $fileInput = $env . '_cert';
+                if ($request->hasFile($fileInput)) {
+                    $file = $request->file($fileInput);
+                    $filename = "MRAPublicKey_{$business->id}.crt";
+                    $file->storeAs("mra/{$env}", $filename);
+                    $mra_settings[$fileInput] = $filename;
+                } else if (isset($existing_mra[$fileInput])) {
+                    $mra_settings[$fileInput] = $existing_mra[$fileInput];
+                }
+            }
+            $business_details['mra_invoicing_settings'] = array_merge($existing_mra, $mra_settings);
             //Update business settings
             if (! empty($business_details['logo'])) {
                 $business->logo = $business_details['logo'];
@@ -724,5 +746,37 @@ class BusinessController extends Controller
         }
 
         return $output;
+    }
+
+    public function testMraConnection(Request $request)
+    {
+        $business = auth()->user()->business;
+        // Validate required fields
+        $validated = $request->validate([
+            'environment' => 'required|in:sandbox,live',
+            'ebsMraId' => 'required|string',
+            'areaCode' => 'required|string',
+            'mra_cert' => 'required|file|mimes:crt',
+        ]);
+
+        // Store certificate temporarily for test
+        $certFile = $request->file('mra_cert');
+        $certFileName = "MRAPublicKey_{$business->id}.crt";
+        $certPath = $certFile->storeAs("mra/{$validated['environment']}", $certFileName);
+
+        // Prepare settings array for helper
+        $settings = [
+            'environment' => $validated['environment'],
+            'ebsMraId' => $validated['ebsMraId'],
+            'areaCode' => $validated['areaCode'],
+            'mra_cert' => $certPath
+        ];
+
+        try {
+            $result = MraHelper::testConnection($business, $settings); // helper function updated for test
+            return response()->json(['success' => true, 'msg' => $result]);
+        } catch (Exception $e) {
+            return response()->json(['success' => false, 'msg' => $e->getMessage()]);
+        }
     }
 }
