@@ -248,11 +248,8 @@
             formData.append('environment', $('#mra_environment').val());
             formData.append('ebsMraId', $('input[name="mra_settings[ebsMraId]"]').val());
             formData.append('areaCode', $('input[name="mra_settings[areaCode]"]').val());
-
-            var sandboxFile = $('input[name="sandbox_cert"]')[0].files[0];
-            var productionFile = $('input[name="production_cert"]')[0].files[0];
-            if (sandboxFile) formData.append('sandbox_cert', sandboxFile);
-            if (productionFile) formData.append('production_cert', productionFile);
+            formData.append('mra_username', $('input[name="mra_settings[mra_username]"]').val());
+            formData.append('mra_password', $('input[name="mra_settings[mra_password]"]').val());
 
             formData.append('_token', $('meta[name="csrf-token"]').attr('content'));
 

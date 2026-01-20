@@ -5,13 +5,90 @@
                   <h4 class="customer-profile-group-heading">
                         MRA e-Invoicing Settings (Mauritius Revenue Authority)
                   </h4>
-                  <hr>
             </div>
-
+            <div class="col-md-12">
+                  <hr>
+                  <h5>Business Details</h5>
+                  <small>Business details registered with the Mauritius Revenue Authority</small>
+            </div>
+            <div class="col-xs-6">
+                  <div class="form-group">
+                        {!! Form::label('mra_business_name', 'Business Name*:') !!}
+                        {!! Form::text(
+                        'mra_settings[businessName]',
+                        $mra_settings['businessName'] ?? '',
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Business Name']
+                        ) !!}
+                  </div>
+            </div>
+            <div class="col-xs-6">
+                  <div class="form-group">
+                        {!! Form::label('mra_business_tan', 'Business TAN*:') !!}
+                        {!! Form::text(
+                        'mra_settings[businessTan]',
+                        $mra_settings['businessTan'] ?? '',
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Business TAN']
+                        ) !!}
+                  </div>
+            </div>
+            <div class="col-xs-6">
+                  <div class="form-group">
+                        {!! Form::label('mra_business_brn', 'Business BRN*:') !!}
+                        {!! Form::text(
+                        'mra_settings[businessBrn]',
+                        $mra_settings['businessBrn'] ?? '',
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Business BRN']
+                        ) !!}
+                  </div>
+            </div>
+            <div class="col-xs-6">
+                  <div class="form-group">
+                        {!! Form::label('mra_business_address', 'Business Address*:') !!}
+                        {!! Form::text(
+                        'mra_settings[businessAddress]',
+                        $mra_settings['businessAddress'] ?? '',
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Business Address']
+                        ) !!}
+                  </div>
+            </div>
+            <div class="col-xs-6">
+                  <div class="form-group">
+                        {!! Form::label('mra_business_phone_no', 'Business Phone No*:') !!}
+                        {!! Form::text(
+                        'mra_settings[businessPhoneNo]',
+                        $mra_settings['businessPhoneNo'] ?? '',
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Business Phone No']
+                        ) !!}
+                  </div>
+            </div>
+            <div class="col-xs-6">
+                  <div class="form-group">
+                        {!! Form::label('mra_business_counter_no', 'Business EBS Counter No*:') !!}
+                        {!! Form::text(
+                        'mra_settings[businessCounterNo]',
+                        $mra_settings['businessCounterNo'] ?? '',
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Business EBS Counter No']
+                        ) !!}
+                  </div>
+            </div>
+            <div class="col-xs-6">
+                  <div class="form-group">
+                        {!! Form::label('mra_business_cashier_id', 'Business Cashier ID*:') !!}
+                        {!! Form::text(
+                        'mra_settings[businessCashierId]',
+                        $mra_settings['businessCashierId'] ?? '',
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Business Cashier ID']
+                        ) !!}
+                  </div>
+            </div>
+            <div class="col-md-12">
+                  <hr>
+                  <h5>API Credentials</h5>
+            </div>
             {{-- Environment --}}
             <div class="col-xs-6">
                   <div class="form-group">
-                        {!! Form::label('mra_environment', 'Environment:') !!}
+                        {!! Form::label('mra_environment', 'Environment*:') !!}
                         {!! Form::select(
                         'mra_settings[environment]',
                         ['sandbox' => 'Sandbox', 'live' => 'Production (Live)'],
@@ -24,11 +101,11 @@
             {{-- EBS MRA ID --}}
             <div class="col-xs-6">
                   <div class="form-group">
-                        {!! Form::label('mra_ebs_id', 'EBS MRA ID:') !!}
+                        {!! Form::label('mra_ebs_id', 'EBS MRA ID*:') !!}
                         {!! Form::text(
                         'mra_settings[ebsMraId]',
                         $mra_settings['ebsMraId'] ?? '',
-                        ['class' => 'form-control', 'placeholder' => 'Enter EBS MRA ID']
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter EBS MRA ID']
                         ) !!}
                   </div>
             </div>
@@ -36,22 +113,22 @@
             {{-- Username --}}
             <div class="col-xs-6">
                   <div class="form-group">
-                        {!! Form::label('mra_username', 'Username:') !!}
+                        {!! Form::label('mra_username', 'Username*:') !!}
                         {!! Form::text(
                         'mra_settings[mra_username]',
                         $mra_settings['mra_username'] ?? '',
-                        ['class' => 'form-control', 'placeholder' => 'Enter Username']
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Username']
                         ) !!}
                   </div>
             </div>
             {{-- Password --}}
             <div class="col-xs-6">
                   <div class="form-group">
-                        {!! Form::label('mra_password', 'Password:') !!}
+                        {!! Form::label('mra_password', 'Password*:') !!}
                         {!! Form::text(
                         'mra_settings[mra_password]',
                         $mra_settings['mra_password'] ?? '',
-                        ['class' => 'form-control', 'placeholder' => 'Enter Password']
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Password']
                         ) !!}
                   </div>
             </div>
@@ -59,33 +136,11 @@
             {{-- Area Code --}}
             <div class="col-xs-6">
                   <div class="form-group">
-                        {!! Form::label('mra_area_code', 'Area Code:') !!}
+                        {!! Form::label('mra_area_code', 'Area Code*:') !!}
                         {!! Form::text(
                         'mra_settings[areaCode]',
                         $mra_settings['areaCode'] ?? '305',
-                        ['class' => 'form-control', 'placeholder' => 'Enter Area Code']) !!}
-                  </div>
-            </div>
-
-            {{-- Sandbox Certificate --}}
-            <div class="col-xs-6">
-                  <div class="form-group">
-                        {!! Form::label('sandbox_cert', 'Sandbox Certificate (.crt):') !!}
-                        {!! Form::file('sandbox_cert', ['class' => 'form-control']) !!}
-                        @if(!empty($mra_settings['sandbox_cert']))
-                        <small class="text-success">Current file: {{ $mra_settings['sandbox_cert'] }}</small>
-                        @endif
-                  </div>
-            </div>
-
-            {{-- Production Certificate --}}
-            <div class="col-xs-6">
-                  <div class="form-group">
-                        {!! Form::label('production_cert', 'Production Certificate (.crt):') !!}
-                        {!! Form::file('production_cert', ['class' => 'form-control']) !!}
-                        @if(!empty($mra_settings['production_cert']))
-                        <small class="text-success">Current file: {{ $mra_settings['production_cert'] }}</small>
-                        @endif
+                        ['class' => 'form-control','required' => true, 'placeholder' => 'Enter Area Code']) !!}
                   </div>
             </div>
 

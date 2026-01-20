@@ -756,19 +756,17 @@ class BusinessController extends Controller
             'environment' => 'required|in:sandbox,live',
             'ebsMraId' => 'required|string',
             'areaCode' => 'required|string',
-            'mra_cert' => 'required|file|mimes:crt',
+            'mra_username' => 'required|string',
+            'mra_password' => 'required|string',
         ]);
-
-        // Store certificate temporarily for test
-        $certFile = $request->file('mra_cert');
-        $certFileName = "MRAPublicKey_{$business->id}.crt";
-        $certPath = $certFile->storeAs("mra/{$validated['environment']}", $certFileName);
-
+        $certPath = storage_path("MRAPublicKey_sandbox.crt");
         // Prepare settings array for helper
         $settings = [
             'environment' => $validated['environment'],
             'ebsMraId' => $validated['ebsMraId'],
             'areaCode' => $validated['areaCode'],
+            'mra_username' => $validated['mra_username'],
+            'mra_password' => $validated['mra_password'],
             'mra_cert' => $certPath
         ];
 

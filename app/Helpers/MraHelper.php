@@ -8,56 +8,68 @@ class MraHelper
     public static function testConnection($business, $settings)
     {
         // Check required fields
-        if (empty($settings['ebsMraId']) || empty($settings['areaCode']) || empty($settings['mra_cert'])) {
-            throw new \Exception("Missing MRA settings for test.");
+        if (empty($settings['ebsMraId']) || empty($settings['mra_username'])) {
+            throw new \Exception("Missing MRA credentials for test.");
         }
 
-        // Read certificate
-        $certPath = storage_path("app/" . $settings['mra_cert']);
-        if (!file_exists($certPath)) {
-            throw new \Exception("Certificate file not found.");
+        // Determine certificate path (optional for local testing)
+        $certPath = $settings['mra_cert'] ?? null;
+
+        // If certificate exists, use it for encryption
+        if ($certPath && file_exists($certPath)) {
+            $certContent = file_get_contents($certPath);
+            $cert = openssl_x509_read($certContent);
+            if ($cert === false) {
+                throw new \Exception("Failed to read certificate content.");
+            }
+
+            $pubKeyDetails = openssl_pkey_get_details(openssl_pkey_get_public($cert));
+            $publicKey = $pubKeyDetails['key'];
+
+            // AES key
+            $aesKey = openssl_random_pseudo_bytes(32);
+            $aesKeyBase64 = base64_encode($aesKey);
+
+            // Payload according to MRA docs
+            $payload = [
+                'encryptKey' => $aesKeyBase64,
+                'username' => $settings['mra_username'],
+                'password' => $settings['mra_password'] ?? '',
+                'refreshToken' => true
+            ];
+
+            $encryptedData = '';
+            openssl_public_encrypt(json_encode($payload), $encryptedData, $publicKey);
+            $base64EncodedData = base64_encode($encryptedData);
+        } else {
+            // For local testing without certificate
+            $base64EncodedData = base64_encode(json_encode([
+                'username' => $settings['mra_username'],
+                'password' => $settings['mra_password'] ?? '',
+                'refreshToken' => true
+            ]));
         }
 
-        $certContent = file_get_contents($certPath);
-        $cert = openssl_x509_read($certContent);
-        if ($cert === false) {
-            throw new \Exception("Failed to read certificate content.");
-        }
-
-        $pubKeyDetails = openssl_pkey_get_details(openssl_pkey_get_public($cert));
-        $publicKey = $pubKeyDetails['key'];
-
-        // AES key
-        $aesKey = openssl_random_pseudo_bytes(32);
-        $aesKeyBase64 = base64_encode($aesKey);
-
-        $payload = [
-            'encryptKey' => $aesKeyBase64,
-            'username' => $settings['ebsMraId'], // for testing, username same as ID
-            'password' => 'TEST_PASSWORD',       // sandbox test
-            'refreshToken' => true
-        ];
-
-        $encryptedData = '';
-        openssl_public_encrypt(json_encode($payload), $encryptedData, $publicKey);
-        $base64EncodedData = base64_encode($encryptedData);
-
+        // Request body
         $postData = [
-            'requestId' => mt_rand(),
+            'requestId' => (string) mt_rand(),
             'payload' => $base64EncodedData
         ];
 
+        // Headers according to Swagger
         $headers = [
             'Content-Type: application/json',
             'ebsMraId: ' . $settings['ebsMraId'],
-            'username: ' . $settings['ebsMraId'],
-            'areaCode: ' . $settings['areaCode']
+            'username: ' . $settings['mra_username'],
+            // 'areaCode' header removed for Swagger compliance
         ];
 
+        // Sandbox or Live URL
         $url = $settings['environment'] === 'sandbox'
             ? 'https://vfisc.mra.mu/einvoice-token-service/token-api/generate-token'
             : 'https://vfisc.mra.mu/einvoice-token-service/token-api/generate-token';
 
+        // cURL request
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_POST, 1);
@@ -73,12 +85,14 @@ class MraHelper
         }
 
         $respArr = json_decode($response, true);
+        // For local testing or sandbox without real certificate
         if (!isset($respArr['token'])) {
             throw new \Exception('Token not received. Response: ' . $response);
         }
 
         return "Test Successful! Token: " . $respArr['token'];
     }
+
 
     public static function generateToken($transaction, $products, $business_gov)
     {
